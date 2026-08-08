@@ -17,8 +17,38 @@ Design constraints (Phase 2):
 
 import json
 import re
-from config import GROQ_API_KEY
+import contextvars
+from config import GROQ_API_KEY, GROQ_MODEL, GROQ_FALLBACK_MODEL, MAX_ANSWER_TOKENS
 
+# ---------------------------------------------------------------------------
+# LLM call observability (item 17) — every physical Groq HTTP request made
+# through with_model_fallback() is recorded here, per-request. Uses a
+# contextvar (not a plain module global) so it's safe under FastAPI's
+# threadpool-per-request execution without threading a tracker object through
+# every graph node's function signature.
+#
+# This is diagnostic-only: it never influences what the app does, only what
+# gets reported afterward. Call start_call_tracking() once per request.
+# ---------------------------------------------------------------------------
+
+_call_log: contextvars.ContextVar[list | None] = contextvars.ContextVar("_call_log", default=None)
+
+
+def start_call_tracking() -> None:
+    """Call once at the top of a request to begin recording LLM calls made during it."""
+    _call_log.set([])
+
+
+def get_call_log() -> list[dict]:
+    """Returns the calls recorded since the last start_call_tracking() in this request."""
+    log = _call_log.get()
+    return list(log) if log is not None else []
+
+
+def _record_call(model: str, role: str, success: bool) -> None:
+    log = _call_log.get()
+    if log is not None:
+        log.append({"model": model, "role": role, "success": success})
 
 # ---------------------------------------------------------------------------
 # Heuristics — avoid LLM calls for simple queries
@@ -35,6 +65,27 @@ _VAGUE_SIGNALS = [
     "what is it", "can you", "describe",
 ]
 
+# ---------------------------------------------------------------------------
+# Shared user-facing copy — one place so main.py / synthesizer.py / verifier.py
+# never drift into showing raw exceptions, "VERIFICATION_UNAVAILABLE", or
+# stale "Fallback Answer: ..." strings to end users.
+# ---------------------------------------------------------------------------
+
+NO_DOCUMENTS_MESSAGE = (
+    "Upload at least one paper to get started — I can only answer questions "
+    "about documents in your current workspace."
+)
+INSUFFICIENT_EVIDENCE_MESSAGE = (
+    "I couldn't find enough information in the uploaded papers to answer this reliably."
+)
+RATE_LIMIT_MESSAGE = (
+    "The AI reasoning service is temporarily rate-limited. Your documents are "
+    "safe — please try again in a bit."
+)
+GENERATION_FAILED_MESSAGE = (
+    "I couldn't generate a reliable answer right now. Please try again shortly."
+)
+
 
 def _looks_vague(query: str) -> bool:
     q = query.lower().strip()
@@ -50,18 +101,31 @@ def _looks_complex(query: str) -> bool:
 # LLM-backed transformation (Groq, same client as llm.py uses)
 # ---------------------------------------------------------------------------
 
-def _call_groq_raw(prompt: str) -> str:
-    """Direct Groq call that returns raw text; raises on any error."""
-    import time
+def _call_groq_raw(prompt: str, max_tokens: int = MAX_ANSWER_TOKENS) -> str:
+    """
+    Direct Groq call that returns raw text; raises on any error.
+
+    Tries GROQ_MODEL first. On a temporary failure only, retries once against
+    GROQ_FALLBACK_MODEL (see `with_model_fallback`) — transparent to callers,
+    who don't need to know which model actually answered.
+
+    max_tokens defaults to the normal-answer budget; report generation
+    passes a larger MAX_REPORT_ANSWER_TOKENS since one report call covers
+    much more ground than one Q&A answer.
+    """
     from groq import Groq
     client = Groq(api_key=GROQ_API_KEY)
-    resp = client.chat.completions.create(
-        model="llama-3.1-8b-instant",   # smallest/fastest for transformation
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.0,
-        max_tokens=512,
-    )
-    return resp.choices[0].message.content.strip()
+
+    def _attempt(model: str) -> str:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0,
+            max_tokens=max_tokens,
+        )
+        return (resp.choices[0].message.content or "").strip()
+
+    return with_model_fallback(_attempt)
 
 
 # ---------------------------------------------------------------------------
@@ -120,6 +184,94 @@ def rewrite_query(query: str) -> str:
         pass
 
     return query  # fallback
+
+
+def is_rate_limit_error(exc: Exception) -> bool:
+    """
+    Best-effort classification of a Groq call failure.
+
+    Distinguishes "temporarily rate-limited" from "genuinely no evidence" so the
+    UI never mislabels a 429 as an empty result. String-matched rather than
+    tied to a specific groq-sdk exception class so it survives SDK upgrades.
+    """
+    msg = str(exc).lower()
+    return "429" in msg or "rate limit" in msg or "rate_limit" in msg
+
+
+def _is_temporary_failure(exc: Exception) -> bool:
+    """
+    True only for failures where retrying against a *different* model is
+    likely to help: rate limits, 5xx/timeouts, or the primary model itself
+    being unavailable/decommissioned.
+
+    False for anything a fallback model can't fix — bad API key, malformed
+    request, or other client-side (4xx) errors — so those fail fast instead
+    of wasting a second call.
+
+    Model-availability errors (e.g. Groq's "model_decommissioned") come back
+    as HTTP 400 with type "invalid_request_error" — the same shape as a
+    genuinely malformed request — so the message content must be checked
+    BEFORE any blanket "4xx = don't retry" rule, not after.
+    """
+    if is_rate_limit_error(exc):
+        return True
+
+    msg = str(exc).lower()
+    if any(s in msg for s in (
+        "decommissioned", "model_not_found", "model not found",
+        "does not exist", "has been deprecated", "no longer supported",
+    )):
+        return True  # different model needed — a fallback model can fix this
+
+    if any(s in msg for s in ("invalid api key", "unauthorized", "authentication")):
+        return False
+
+    status = getattr(exc, "status_code", None)
+    if status in (500, 502, 503, 504, 408):
+        return True
+    if status in (401, 403, 400, 422):
+        return False
+
+    if any(s in msg for s in (
+        "timeout", "timed out", "connection", "temporarily unavailable",
+        "service unavailable", "internal server error", "502", "503", "504",
+    )):
+        return True
+    return False  # unknown error shape — safer to fail clean than to guess
+
+
+def with_model_fallback(make_request):
+    """
+    Calls `make_request(model_name)` with GROQ_MODEL first.
+
+    On a *temporary* failure only (see `_is_temporary_failure`), retries
+    exactly once against GROQ_FALLBACK_MODEL. Never retries beyond that, and
+    never falls back for auth/validation errors a different model can't fix.
+
+    If both attempts fail, re-raises the ORIGINAL primary-model exception so
+    existing callers' rate-limit classification (`is_rate_limit_error`)
+    keeps working unchanged.
+
+    Records every physical attempt via _record_call() for observability —
+    this is where the real, external call count is measured, not assumed.
+    """
+    try:
+        result = make_request(GROQ_MODEL)
+        _record_call(GROQ_MODEL, "primary", True)
+        return result
+    except Exception as primary_error:
+        _record_call(GROQ_MODEL, "primary", False)
+        if not GROQ_FALLBACK_MODEL or GROQ_FALLBACK_MODEL == GROQ_MODEL:
+            raise
+        if not _is_temporary_failure(primary_error):
+            raise
+        try:
+            result = make_request(GROQ_FALLBACK_MODEL)
+            _record_call(GROQ_FALLBACK_MODEL, "fallback", True)
+            return result
+        except Exception:
+            _record_call(GROQ_FALLBACK_MODEL, "fallback", False)
+            raise primary_error
 
 
 def decompose_query(query: str) -> list[str]:

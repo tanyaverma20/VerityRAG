@@ -237,15 +237,31 @@ def test_retry_behavior():
 
 # ---------------------------------------------------------------------------
 # TEST 14 — LLM failure fallback
+#
+# Updated for the "normal query = exactly 1 LLM call" optimization: NORMAL
+# mode (no research_type, or "simple") now never calls the planner LLM at
+# all — there's nothing to "fall back from". _call_groq_raw failing is only
+# meaningful for DEEP mode, which still uses the LLM-backed planner and
+# still needs to fall back deterministically when it fails.
 # ---------------------------------------------------------------------------
 def test_llm_fallback_planner():
     from unittest.mock import patch
-    with patch("graph.planner._call_groq_raw", side_effect=Exception("simulated LLM fail")):
+
+    # Normal mode: the LLM planner must not be called at all, mock or not.
+    with patch("graph.planner._call_groq_raw", side_effect=Exception("should never be called")) as mock_call:
         state = {"original_query": "test fallback query"}
         res = plan_research(state)
-        # Should fallback deterministically
+        assert "research_plan" in res, "Must return a plan"
+        assert mock_call.call_count == 0, "Normal mode must never call the planner LLM"
+        assert "zero LLM calls" in res["research_plan"]["reasoning"]
+
+    # Deep mode: the LLM planner IS used, and must still fall back
+    # deterministically (not crash the graph) when it fails.
+    with patch("graph.planner._call_groq_raw", side_effect=Exception("simulated LLM fail")):
+        state = {"original_query": "test fallback query", "research_type": "deep"}
+        res = plan_research(state)
         assert "research_plan" in res, "Must return fallback plan"
-        assert res["research_plan"]["reasoning"].startswith("Fallback"), "Should use fallback reasoning"
+        assert res["research_plan"]["reasoning"].startswith("Fallback"), "Deep mode should use fallback reasoning on LLM failure"
 
 # ---------------------------------------------------------------------------
 # TEST 15 — Full graph execution (Single Paper)
@@ -270,6 +286,7 @@ def test_api_backward_compatibility():
         collection_id = None
         strategy = "hybrid"
         research_type = "simple"
+        session_id = None
         
     res = main.query(MockRequest())
     assert "answer" in res, "Must return 'answer'"

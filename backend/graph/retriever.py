@@ -40,7 +40,9 @@ def retrieve_evidence(state: ResearchState) -> dict[str, Any]:
             )
             all_chunks.extend(chunks)
             newly_completed.append(sq)
-        except Exception:
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
             pass # continue with other queries if one fails
             
     # Deduplicate chunks retrieved across different sub_queries

@@ -59,6 +59,7 @@ def log_query_event(
     errors: list[str] | None = None,
     model_name: str = "",
     prompt_version: str = "v1",
+    llm_calls: int = 0,   # actual physical Groq HTTP requests made for this query (item 17)
     # --- Phase 6 Adaptive Fields ---
     research_type: str = "simple",
     research_iterations: int = 1,
@@ -67,6 +68,11 @@ def log_query_event(
     contradiction_count: int = 0,
     research_gap_count: int = 0,
     confidence: str = "UNAVAILABLE",
+    # --- Phase 7 Async / Conversation Fields ---
+    session_id: str | None = None,
+    task_id: str | None = None,
+    collection_id: str | None = None,
+    task_status: str | None = None,
     # -------------------------------
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -101,6 +107,7 @@ def log_query_event(
         "errors": errors or [],
         "model_name": model_name,
         "prompt_version": prompt_version,
+        "llm_calls": llm_calls,
         "research_type": research_type,
         "research_iterations": research_iterations,
         "adaptive_queries": adaptive_queries,
@@ -108,6 +115,10 @@ def log_query_event(
         "contradiction_count": contradiction_count,
         "research_gap_count": research_gap_count,
         "confidence": confidence,
+        "session_id": session_id,
+        "task_id": task_id,
+        "collection_id": collection_id,
+        "task_status": task_status,
     }
     if extra:
         event["extra"] = extra
@@ -135,6 +146,22 @@ def read_recent_events(n: int = 50) -> list[dict[str, Any]]:
         return [json.loads(line) for line in recent if line.strip()]
     except Exception:
         return []
+
+def filter_events(task_id: str | None = None, session_id: str | None = None, event_type: str | None = None, n: int = 50) -> list[dict[str, Any]]:
+    """
+    Read and filter events safely.
+    """
+    events = read_recent_events(1000) # read up to 1000, then filter and take n
+    filtered = []
+    for ev in events:
+        if task_id and ev.get("task_id") != task_id:
+            continue
+        if session_id and ev.get("session_id") != session_id:
+            continue
+        if event_type and ev.get("question_type") != event_type: # Using question_type or a generic event_type concept
+            continue
+        filtered.append(ev)
+    return filtered[-n:]
 
 
 def get_log_path() -> Path:

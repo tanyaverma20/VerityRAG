@@ -47,9 +47,9 @@ verityrag/
 
 **Start the backend** (from the `backend/` folder, with venv active):
 ```bash
-uvicorn main:app --reload --port 8000
+uvicorn main:app --reload --port 8001
 ```
-Visit `http://localhost:8000/health` — you should see `{"status":"ok","chunks_indexed":0}`.
+Visit `http://localhost:8001/health` — you should see `{"status":"ok","chunks_indexed":0}`.
 
 **Open the frontend**: just open `frontend/index.html` directly in your browser
 (no build step, no dev server needed). Upload a PDF, then ask a question.

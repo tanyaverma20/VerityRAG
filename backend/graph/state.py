@@ -11,6 +11,10 @@ class ResearchState(TypedDict):
     # 1. Inputs
     original_query: str
     research_type: str             # "simple" or "deep"
+    session_id: str
+    task_id: str
+    chat_history: list[dict]       # [{"role": "user", "content": "..."}, ...]
+    structured_mode: bool          # Feature 6: request structured research extraction from the SAME synthesis call
     
     # 2. Planning Phase
     research_plan: dict[str, Any]  # {"mode": "...", "comparison_dimensions": [...], etc}
@@ -40,6 +44,10 @@ class ResearchState(TypedDict):
     claims: list[dict]             # The Claim Graph: {"claim_id", "claim_text", "claim_type", "supporting_evidence": [...], "contradicting_evidence": [...], "citations", "verification_status", "confidence"}
     confidence: str                # HIGH, MEDIUM, LOW, UNAVAILABLE
     citations: list[dict]
+    grounded: bool                 # self-reported by the ONE synthesis call (normal mode); no separate verifier call
+    evidence_sufficient: bool      # self-reported by the ONE synthesis call (normal mode); no separate verifier call
+    self_reported_document_ids: list[str]  # auxiliary signal only; citations stay evidence-derived, not model-derived
+    structured_data: dict | None   # populated only when structured_mode was requested AND synthesis succeeded
     
     # 8. Verification Phase
     verification_results: list[dict]

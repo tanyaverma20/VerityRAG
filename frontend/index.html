@@ -3,392 +3,1143 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VerityRAG Workspace</title>
+<title>VerityRAG — AI Research Assistant</title>
 <style>
-  body { font-family: -apple-system, sans-serif; margin: 0; padding: 0; color: #222; background: #f9f9f9; display: flex; height: 100vh; }
-  
-  /* Sidebar */
-  .sidebar { width: 300px; background: #fff; border-right: 1px solid #ddd; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
-  .sidebar h2 { font-size: 16px; margin: 0 0 10px 0; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.5px; }
-  
-  .upload-box { border: 2px dashed #ccc; padding: 15px; text-align: center; border-radius: 6px; background: #fafafa; cursor: pointer; transition: 0.2s; }
-  .upload-box:hover { border-color: #999; }
-  .upload-box input { display: none; }
-  
-  .list-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: #f4f4f4; border-radius: 4px; margin-bottom: 8px; font-size: 14px; }
-  .list-item:hover { background: #eee; }
-  .list-item .doc-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
-  .list-item .delete-btn { color: #d14b4b; cursor: pointer; border: none; background: none; font-size: 16px; padding: 0 5px; }
-  
-  .collection-item { cursor: pointer; padding: 8px; border-radius: 4px; border: 1px solid transparent; }
-  .collection-item.active { background: #e0f0ff; border-color: #b3d4ff; font-weight: 500; }
-  
-  /* Main Content */
-  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-  .header { padding: 20px 30px; background: #fff; border-bottom: 1px solid #ddd; display: flex; align-items: center; gap: 15px; }
-  .header input[type="text"] { flex: 1; padding: 12px 16px; font-size: 16px; border: 1px solid #ccc; border-radius: 8px; outline: none; }
-  .header button { padding: 12px 24px; font-size: 16px; background: #222; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; }
-  .header button:hover { background: #444; }
-  
-  .toggle-container { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: #555; }
-  .toggle-checkbox { width: 18px; height: 18px; cursor: pointer; }
-  
-  .content { flex: 1; overflow-y: auto; padding: 30px; display: flex; gap: 30px; }
-  
-  /* Answer Panel */
-  .answer-panel { flex: 2; display: flex; flex-direction: column; gap: 20px; }
-  .card { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-  .card h3 { margin-top: 0; font-size: 18px; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }
-  
-  .answer-text { line-height: 1.6; white-space: pre-wrap; font-size: 15px; }
-  
-  /* Verification Panel */
-  .meta-panel { flex: 1; display: flex; flex-direction: column; gap: 20px; }
-  .claim { border-left: 3px solid #ccc; padding-left: 12px; margin-bottom: 12px; font-size: 14px; background: #fafafa; padding: 10px 10px 10px 12px; border-radius: 0 4px 4px 0; }
-  .supported { border-color: #3b9c5a; }
-  .unsupported { border-color: #d14b4b; }
-  .weakly_supported { border-color: #d19b3b; }
-  .verification_unavailable { border-color: #888; }
-  .claim-status { font-weight: 600; margin-bottom: 4px; font-size: 12px; text-transform: uppercase; }
-  .claim-text { font-weight: 500; margin-bottom: 6px; }
-  .claim-evidence { color: #666; font-size: 13px; font-style: italic; }
-  
-  .muted { color: #777; font-size: 13px; }
-  
-  /* Modal */
-  .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 100; }
-  .modal { background: #fff; padding: 25px; border-radius: 8px; width: 400px; }
-  .modal h3 { margin-top: 0; }
-  .modal input, .modal select { width: 100%; padding: 8px; margin-bottom: 15px; box-sizing: border-box; }
-  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
-  .modal-actions button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; }
-  .btn-primary { background: #222; color: #fff; }
-  .btn-secondary { background: #eee; color: #333; }
+  :root {
+    --bg: #f6f7f9;
+    --surface: #ffffff;
+    --surface-2: #f1f2f5;
+    --border: #e4e6ea;
+    --text: #1c1e21;
+    --text-muted: #6b7280;
+    --text-faint: #9aa0a8;
+    --accent: #4f46e5;
+    --accent-hover: #4338ca;
+    --accent-soft: #eef0ff;
+    --danger: #dc4c4c;
+    --success: #1f9d55;
+    --warn: #c98a1f;
+    --radius-lg: 16px;
+    --radius-md: 12px;
+    --radius-sm: 8px;
+    --shadow: 0 1px 2px rgba(16,24,40,0.04), 0 1px 3px rgba(16,24,40,0.06);
+    --shadow-lg: 0 8px 24px rgba(16,24,40,0.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17181c;
+      --surface: #202127;
+      --surface-2: #26272e;
+      --border: #34353d;
+      --text: #edeef0;
+      --text-muted: #9a9ea6;
+      --text-faint: #6c6f77;
+      --accent: #7c7ff2;
+      --accent-hover: #8f92f5;
+      --accent-soft: #26264a;
+      --danger: #f0716e;
+      --success: #4cc27b;
+      --warn: #e0ab52;
+      --shadow: 0 1px 2px rgba(0,0,0,0.2), 0 1px 3px rgba(0,0,0,0.3);
+      --shadow-lg: 0 8px 28px rgba(0,0,0,0.45);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+  }
+
+  /* ---------------- App shell (sidebar + main column) ---------------- */
+  .app-shell { display: flex; height: 100vh; width: 100%; }
+
+  .sidebar {
+    width: 264px; flex-shrink: 0; background: var(--surface-2);
+    border-right: 1px solid var(--border); display: flex; flex-direction: column;
+    padding: 16px 12px; gap: 4px; transition: margin-left .2s ease;
+  }
+  .sidebar-brand { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; padding: 4px 8px 14px; }
+  .sidebar-brand span { color: var(--accent); }
+  .new-chat-btn, .new-workspace-btn {
+    display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    padding: 9px 12px; border-radius: var(--radius-md); font-size: 13.5px; font-weight: 600;
+    cursor: pointer; transition: background .15s, border-color .15s;
+  }
+  .new-chat-btn:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+  .new-workspace-btn { font-weight: 500; color: var(--text-muted); margin-bottom: 10px; font-size: 12.5px; }
+  .new-workspace-btn:hover { border-color: var(--danger); color: var(--danger); }
+  .sidebar-section-label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--text-faint); padding: 12px 8px 6px;
+  }
+  .conversation-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+  .conv-item {
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--radius-sm);
+    cursor: pointer; font-size: 13px; color: var(--text-muted); position: relative;
+  }
+  .conv-item:hover { background: var(--surface); }
+  .conv-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .conv-item .conv-item-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .conv-item .conv-delete {
+    border: none; background: none; color: var(--text-faint); cursor: pointer; font-size: 13px;
+    padding: 2px 5px; border-radius: 4px; opacity: 0; flex-shrink: 0;
+  }
+  .conv-item:hover .conv-delete { opacity: 1; }
+  .conv-item .conv-delete:hover { color: var(--danger); background: var(--surface-2); }
+
+  .main-column { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+
+  .sidebar-toggle {
+    display: none; border: 1px solid var(--border); background: var(--surface); color: var(--text-muted);
+    width: 32px; height: 32px; border-radius: var(--radius-sm); cursor: pointer; font-size: 15px; flex-shrink: 0;
+  }
+
+  /* ---------------- Header ---------------- */
+  .topbar {
+    padding: 14px 28px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .conv-title { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+  .tagline { font-size: 12.5px; color: var(--text-muted); }
+
+  /* ---------------- Papers tray ---------------- */
+  .papers-tray {
+    display: flex;
+    gap: 10px;
+    padding: 14px 28px;
+    overflow-x: auto;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .papers-tray::-webkit-scrollbar { height: 6px; }
+  .papers-tray::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .upload-card {
+    flex-shrink: 0;
+    width: 148px;
+    height: 92px;
+    border: 1.5px dashed var(--border);
+    border-radius: var(--radius-md);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: border-color .15s, color .15s, background .15s;
+  }
+  .upload-card:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .upload-card input { display: none; }
+  .upload-card .plus { font-size: 20px; line-height: 1; }
+  .upload-card .label { font-size: 12px; font-weight: 500; }
+
+  .paper-card {
+    flex-shrink: 0;
+    width: 190px;
+    padding: 12px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    position: relative;
+    animation: pop-in .18s ease-out;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .paper-card:hover { border-color: var(--accent); }
+  .paper-card.selected { border-color: var(--accent); background: var(--accent-soft); }
+  @keyframes pop-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
+  .paper-card .selected-badge {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+    color: var(--accent); margin-bottom: 4px;
+  }
+  .paper-card .card-actions { display: flex; gap: 6px; margin-top: 8px; }
+  .paper-card .summarize-btn {
+    font-size: 11px; font-weight: 600; color: var(--accent); background: none;
+    border: 1px solid var(--border); border-radius: 999px; padding: 3px 9px; cursor: pointer;
+  }
+  .paper-card .summarize-btn:hover:not(:disabled) { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .paper-card .summarize-btn:disabled { opacity: .4; cursor: not-allowed; }
+  .paper-card .remove-btn {
+    position: absolute; top: 6px; right: 8px;
+    border: none; background: none; cursor: pointer;
+    color: var(--text-faint); font-size: 15px; line-height: 1;
+    padding: 2px 4px; border-radius: 4px;
+    z-index: 2;
+  }
+  .paper-card .remove-btn:hover { color: var(--danger); background: var(--surface-2); }
+  .paper-card .filename {
+    font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; padding-right: 16px; margin-bottom: 6px;
+  }
+  .paper-card .status-line {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--text-muted); margin-bottom: 8px;
+  }
+  .status-icon { width: 13px; height: 13px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; }
+  .spinner {
+    width: 12px; height: 12px; border-radius: 50%;
+    border: 2px solid var(--border); border-top-color: var(--accent);
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .status-line.ready { color: var(--success); }
+  .status-line.failed { color: var(--danger); }
+
+  .step-track { display: flex; align-items: center; gap: 3px; }
+  .step-dot { flex: 1; height: 4px; border-radius: 2px; background: var(--border); transition: background .2s; }
+  .step-dot.done { background: var(--accent); }
+  .step-dot.failed-dot { background: var(--danger); }
+
+  /* ---------------- Chat ---------------- */
+  .chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 0 12px;
+    display: flex;
+    flex-direction: column;
+  }
+  .chat-inner { max-width: 760px; width: 100%; margin: 0 auto; padding: 0 28px; display: flex; flex-direction: column; gap: 18px; }
+
+  .empty-state {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; color: var(--text-muted); gap: 8px; padding: 40px;
+  }
+  .empty-state .icon { font-size: 34px; margin-bottom: 4px; }
+  .empty-state h2 { font-size: 17px; margin: 0; color: var(--text); font-weight: 600; }
+  .empty-state p { font-size: 14px; margin: 0; max-width: 380px; }
+
+  .msg-row { display: flex; animation: rise-in .2s ease-out; }
+  @keyframes rise-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .msg-row.user { justify-content: flex-end; }
+  .msg-row.assistant { justify-content: flex-start; }
+
+  .bubble {
+    max-width: 82%;
+    padding: 12px 16px;
+    border-radius: var(--radius-lg);
+    font-size: 14.5px;
+    line-height: 1.6;
+  }
+  .msg-row.user .bubble { background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+  .msg-row.assistant .bubble, .msg-row.report .bubble { background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 4px; box-shadow: var(--shadow); }
+  .msg-row.report { justify-content: flex-start; }
+  .bubble p { margin: 0 0 8px; }
+  .bubble p:last-child { margin-bottom: 0; }
+  .bubble ul { margin: 4px 0 8px; padding-left: 20px; }
+  .bubble strong { font-weight: 700; }
+
+  .thinking-dots { display: inline-flex; gap: 4px; align-items: center; padding: 2px 0; }
+  .thinking-dots span {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint);
+    animation: bounce 1.1s infinite ease-in-out;
+  }
+  .thinking-dots span:nth-child(2) { animation-delay: .15s; }
+  .thinking-dots span:nth-child(3) { animation-delay: .3s; }
+  @keyframes bounce { 0%, 80%, 100% { transform: translateY(0); opacity: .5; } 40% { transform: translateY(-4px); opacity: 1; } }
+
+  .sources-toggle {
+    margin-top: 8px; font-size: 12.5px; color: var(--accent); cursor: pointer;
+    display: inline-flex; align-items: center; gap: 4px; font-weight: 500; user-select: none;
+  }
+  .sources-toggle:hover { color: var(--accent-hover); }
+  .sources-list { margin-top: 8px; display: none; flex-direction: column; gap: 6px; }
+  .sources-list.open { display: flex; }
+  .source-chip {
+    font-size: 12.5px; padding: 8px 10px; border-radius: var(--radius-sm);
+    background: var(--surface-2); border: 1px solid var(--border);
+  }
+  .source-chip .src-name { font-weight: 600; }
+  .source-chip .src-meta { color: var(--text-muted); }
+  .source-chip .src-text { color: var(--text-muted); margin-top: 3px; font-style: italic; }
+
+  /* ---------------- Composer ---------------- */
+  .composer {
+    flex-shrink: 0;
+    padding: 12px 28px 20px;
+    background: var(--bg);
+  }
+  .composer-inner { max-width: 760px; margin: 0 auto; }
+
+  .suggestions { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .chip {
+    border: 1px solid var(--border); background: var(--surface); color: var(--text-muted);
+    padding: 6px 12px; border-radius: 999px; font-size: 12.5px; cursor: pointer;
+    transition: border-color .15s, color .15s;
+  }
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+  .chip:disabled { opacity: .5; cursor: not-allowed; }
+
+  .input-shell {
+    display: flex; align-items: flex-end; gap: 10px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 8px 8px 8px 16px; box-shadow: var(--shadow);
+  }
+  .input-shell textarea {
+    flex: 1; border: none; outline: none; resize: none; background: transparent; color: var(--text);
+    font-family: inherit; font-size: 14.5px; line-height: 1.5; max-height: 140px; padding: 8px 0;
+  }
+  .input-shell textarea::placeholder { color: var(--text-faint); }
+
+  .deep-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); white-space: nowrap; padding-bottom: 10px; user-select: none; cursor: pointer; }
+  .deep-toggle input { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; }
+
+  .send-btn {
+    border: none; background: var(--accent); color: #fff; width: 38px; height: 38px;
+    border-radius: 50%; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 16px; transition: background .15s, transform .1s;
+  }
+  .send-btn:hover:not(:disabled) { background: var(--accent-hover); }
+  .send-btn:active:not(:disabled) { transform: scale(.94); }
+  .send-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  .footnote { text-align: center; font-size: 11px; color: var(--text-faint); margin-top: 10px; }
+
+  /* ---------------- Report ---------------- */
+  .toolbar-row { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
+  .report-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent);
+    padding: 6px 13px; border-radius: 999px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+  .report-btn:hover:not(:disabled) { background: var(--accent); color: #fff; }
+  .report-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  .msg-row.report .bubble { max-width: 92%; width: 92%; }
+  .report-card .report-title { font-size: 16.5px; font-weight: 700; margin: 0 0 6px; }
+  .report-card .report-overview { color: var(--text-muted); margin: 0 0 14px; }
+  .report-card h4 {
+    font-size: 13.5px; font-weight: 700; margin: 16px 0 6px; padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .report-card h4:first-of-type { border-top: none; padding-top: 0; }
+  .report-card .field-label { font-size: 12.5px; font-weight: 600; margin: 8px 0 2px; color: var(--text-muted); }
+  .report-card p { margin: 2px 0 8px; }
+  .report-card ul { margin: 2px 0 8px; padding-left: 20px; }
+  .report-card .comparison-block { background: var(--surface-2); border-radius: var(--radius-sm); padding: 10px 14px; margin-top: 6px; }
+  .report-card .not-covered { color: var(--text-faint); font-size: 12px; margin-top: 10px; }
+  .report-downloads { display: flex; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .report-downloads a {
+    font-size: 12.5px; font-weight: 600; color: var(--accent); text-decoration: none;
+    border: 1px solid var(--border); padding: 6px 12px; border-radius: var(--radius-sm);
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .report-downloads a:hover { border-color: var(--accent); background: var(--accent-soft); }
+
+  .pipeline-status { display: flex; flex-direction: column; gap: 8px; min-width: 220px; }
+  .pipeline-status .stage-text { font-size: 13.5px; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
+
+  @media (max-width: 860px) {
+    .sidebar-toggle { display: flex; align-items: center; justify-content: center; }
+    .sidebar {
+      position: fixed; top: 0; left: 0; height: 100vh; z-index: 50;
+      margin-left: -280px; box-shadow: var(--shadow-lg);
+    }
+    .sidebar.open { margin-left: 0; }
+    .sidebar-scrim {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 40;
+    }
+    .sidebar-scrim.open { display: block; }
+  }
+
+  @media (max-width: 640px) {
+    .topbar, .papers-tray, .composer { padding-left: 16px; padding-right: 16px; }
+    .chat-inner { padding: 0 16px; }
+    .bubble { max-width: 90%; }
+    .sidebar { width: 240px; }
+  }
 </style>
 </head>
 <body>
-  
-  <div class="sidebar">
-    <!-- Documents -->
-    <div>
-      <h2>Documents</h2>
-      <label class="upload-box">
+
+<div class="app-shell">
+  <div class="sidebar-scrim" id="sidebarScrim" onclick="toggleSidebar(false)"></div>
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">Verity<span>RAG</span></div>
+    <button class="new-chat-btn" onclick="newChat()">+ New Chat</button>
+    <button class="new-workspace-btn" onclick="newWorkspace()">🗑 New Workspace (clears papers too)</button>
+    <div class="sidebar-section-label">Recent</div>
+    <div class="conversation-list" id="conversationList"></div>
+  </aside>
+
+  <div class="main-column">
+    <header class="topbar">
+      <button class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">☰</button>
+      <div>
+        <div class="conv-title" id="convTitle">New conversation</div>
+        <div class="tagline">Understand, compare and analyze your research papers.</div>
+      </div>
+    </header>
+
+    <div class="papers-tray" id="papersTray">
+      <label class="upload-card">
         <input type="file" id="fileInput" accept=".pdf" multiple onchange="handleUpload(event)">
-        <span id="uploadText">Click to upload PDFs</span>
+        <span class="plus">+</span>
+        <span class="label">Upload PDFs</span>
       </label>
-      <div id="documentList" style="margin-top: 15px;"></div>
+      <!-- paper cards injected here -->
     </div>
-    
-    <!-- Collections -->
-    <div>
-      <h2>Collections</h2>
-      <button onclick="openCollectionModal()" style="width: 100%; padding: 8px; margin-bottom: 10px; cursor: pointer; border: 1px solid #ccc; background: #fff; border-radius: 4px;">+ New Collection</button>
-      
-      <div class="collection-item active" onclick="selectCollection(null, this)" id="col-all">
-        All Documents
-      </div>
-      <div id="collectionList"></div>
-    </div>
-  </div>
 
-  <div class="main">
-    <div class="header">
-      <input type="text" id="question" placeholder="Ask a research question (e.g. Compare the training datasets in these papers...)">
-      <div class="toggle-container">
-        <input type="checkbox" id="deepResearchToggle" class="toggle-checkbox">
-        <label for="deepResearchToggle">Deep Research</label>
-      </div>
-      <button onclick="askQuestion()">Research</button>
-    </div>
-    
-    <div class="content" id="workspaceContent" style="display: none;">
-      <div class="answer-panel">
-        <div class="card">
-          <h3>Synthesis</h3>
-          <div id="answer" class="answer-text"></div>
-        </div>
-        
-        <div class="card" id="sourcesCard">
-          <h3>Retrieved Evidence</h3>
-          <div id="sources"></div>
-        </div>
-      </div>
-      
-      <div class="meta-panel">
-        <div class="card" id="analysisCard" style="display: none;">
-          <h3>Cross-Paper Analysis</h3>
-          <div id="analysisStats" style="margin-bottom: 10px; font-weight: 600; font-size: 14px; color: #333;"></div>
-          <div id="analysisContent"></div>
-        </div>
-      
-        <div class="card">
-          <h3>Claim Verification & Graph</h3>
-          <div id="confidenceStats" style="margin-bottom: 5px; font-weight: 600; font-size: 14px;"></div>
-          <div id="verificationStats" style="margin-bottom: 15px; font-weight: 500;"></div>
-          <div id="verificationList"></div>
-        </div>
-      </div>
-    </div>
-  </div>
+    <main class="chat" id="chat">
+      <!-- empty state or messages injected here -->
+    </main>
 
-  <!-- Collection Modal -->
-  <div class="modal-overlay" id="colModal">
-    <div class="modal">
-      <h3>Create Collection</h3>
-      <label>Name</label>
-      <input type="text" id="colName" placeholder="e.g. LLM Architectures">
-      <label>Select Documents</label>
-      <select id="colDocs" multiple style="height: 120px;"></select>
-      
-      <div class="modal-actions">
-        <button class="btn-secondary" onclick="closeCollectionModal()">Cancel</button>
-        <button class="btn-primary" onclick="createCollection()">Create</button>
+    <div class="composer">
+    <div class="composer-inner">
+      <div class="toolbar-row" id="reportToolbar">
+        <button class="report-btn" id="reportBtn" onclick="generateReport()">📄 Generate Report</button>
       </div>
+      <div class="suggestions" id="suggestions">
+        <button class="chip" onclick="useSuggestion('Summarize this paper.')">Summarize</button>
+        <button class="chip" onclick="useSuggestion('Compare the methodologies of these papers.')">Compare methodologies</button>
+        <button class="chip" onclick="useSuggestion('What are the key limitations?')">Find limitations</button>
+        <button class="chip" onclick="useSuggestion('What datasets were used?')">Datasets used</button>
+      </div>
+      <div class="input-shell">
+        <textarea id="question" rows="1" placeholder="Ask anything about your papers..." onkeydown="onQuestionKeydown(event)" oninput="autoGrow(this)"></textarea>
+        <label class="deep-toggle">
+          <input type="checkbox" id="deepResearchToggle">
+          <span>Deep Research</span>
+        </label>
+        <button class="send-btn" id="sendBtn" onclick="sendQuestion()" title="Send">➤</button>
+      </div>
+      <div class="footnote">VerityRAG answers strictly from the papers you've uploaded — never from outside knowledge.</div>
+    </div>
     </div>
   </div>
+</div>
 
 <script>
-const API_BASE = "http://localhost:8000";
-let activeCollectionId = null;
+// ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
+// Backend runs on 127.0.0.1:8001 (not "localhost" — avoids Windows IPv6/IPv4
+// resolution issues in the browser). Single source of truth for the API URL.
+const API_BASE = "http://127.0.0.1:8001";
+const WORKSPACE_KEY = "verityrag_workspace_v2";
+const PIPELINE_STAGES = ["Uploading", "Parsing", "Chunking", "Embedding", "Indexing"];
+const REPORT_STAGES = ["Retrieving evidence", "Reranking", "Generating report"];
 
-// --- Initialization ---
-async function loadState() {
-  await fetchDocuments();
-  await fetchCollections();
+// Workspace state lives in sessionStorage only (per-tab). This is deliberate:
+// the app must never surface documents from the canonical/test Chroma corpus
+// as if they were the user's active files, so the document list is NEVER
+// sourced from a global "list everything ever ingested" endpoint. A fresh
+// tab/session always starts from a clean workspace.
+//
+// Uploaded papers are shared across every conversation (they're one upload
+// flow into one Chroma workspace) — but WHICH of them a given conversation
+// is scoped to (its selection) is per-conversation, so switching chats can't
+// bleed one conversation's document focus into another's.
+let papers = [];          // [{id, document_id, filename, status, error}]
+let conversations = [];   // [{id, title, createdAt, updatedAt, messages, selectedDocIds, sessionId}]
+let activeConversationId = null;
+let sending = false;
+let reportGenerating = false;
+
+function getActiveConversation() {
+  return conversations.find(c => c.id === activeConversationId) || null;
 }
-window.onload = loadState;
 
-// --- Documents ---
-async function fetchDocuments() {
-  const res = await fetch(`${API_BASE}/documents`);
-  const docs = await res.json();
-  const list = document.getElementById("documentList");
-  list.innerHTML = "";
-  
-  const select = document.getElementById("colDocs");
-  select.innerHTML = "";
-  
-  docs.forEach(doc => {
-    // Sidebar list
-    const div = document.createElement("div");
-    div.className = "list-item";
-    div.innerHTML = `
-      <div class="doc-title" title="${doc.filename}">${doc.filename} <br><span class="muted">${doc.ingestion_status} (${doc.chunk_count} chunks)</span></div>
-      <button class="delete-btn" onclick="deleteDocument('${doc.document_id}')">×</button>
+// ---------------------------------------------------------------------------
+// Persistence
+// ---------------------------------------------------------------------------
+function loadWorkspace() {
+  papers = [];
+  conversations = [];
+  activeConversationId = null;
+  try {
+    const raw = sessionStorage.getItem(WORKSPACE_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    papers = (data.papers || []).filter(p => p.status === "ready" || p.status === "failed");
+    conversations = data.conversations || [];
+    activeConversationId = data.activeConversationId || (conversations[0] && conversations[0].id) || null;
+  } catch (e) { /* corrupt state — start clean */ }
+}
+function saveWorkspace() {
+  const serializablePapers = papers.map(({ id, document_id, filename, status, error }) => ({ id, document_id, filename, status, error }));
+  sessionStorage.setItem(WORKSPACE_KEY, JSON.stringify({ papers: serializablePapers, conversations, activeConversationId }));
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str ?? "";
+  return div.innerHTML;
+}
+
+function renderAnswerHtml(text) {
+  const escaped = escapeHtml(text).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  const paragraphs = escaped.split(/\n\s*\n/);
+  return paragraphs.map(block => {
+    const lines = block.split("\n").filter(l => l.trim().length);
+    if (!lines.length) return "";
+    const bulletLines = lines.filter(l => /^\s*[-*•]\s+/.test(l));
+    if (bulletLines.length === lines.length) {
+      return "<ul>" + lines.map(l => `<li>${l.replace(/^\s*[-*•]\s+/, "")}</li>`).join("") + "</ul>";
+    }
+    return `<p>${lines.join("<br>")}</p>`;
+  }).join("");
+}
+
+function friendlyError(err) {
+  const msg = String(err && err.message || err || "");
+  if (msg.toLowerCase().includes("failed to fetch") || msg.toLowerCase().includes("networkerror")) {
+    return "VerityRAG couldn't connect to the research service. Please make sure the backend is running.";
+  }
+  if (msg.includes("429")) {
+    return "The AI reasoning service is temporarily rate-limited. Your documents are safe; please try again later.";
+  }
+  return "Something went wrong while processing that request. Please try again.";
+}
+
+function scrollChatToBottom() {
+  const chat = document.getElementById("chat");
+  requestAnimationFrame(() => { chat.scrollTop = chat.scrollHeight; });
+}
+
+function autoGrow(el) {
+  el.style.height = "auto";
+  el.style.height = Math.min(el.scrollHeight, 140) + "px";
+}
+
+function onQuestionKeydown(e) {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendQuestion();
+  }
+}
+
+function useSuggestion(text) {
+  const el = document.getElementById("question");
+  el.value = text;
+  autoGrow(el);
+  el.focus();
+}
+
+// ---------------------------------------------------------------------------
+// Papers tray rendering
+// ---------------------------------------------------------------------------
+function stageIndex(status) {
+  const idx = PIPELINE_STAGES.findIndex(s => s.toLowerCase() === status);
+  return idx === -1 ? PIPELINE_STAGES.length : idx; // "ready"/"failed" => full/attempted
+}
+
+function renderPapers() {
+  const tray = document.getElementById("papersTray");
+  // Remove all existing paper cards (keep the upload card, which is first child)
+  [...tray.querySelectorAll(".paper-card")].forEach(el => el.remove());
+
+  const conv = getActiveConversation();
+  const selectedDocIds = conv ? conv.selectedDocIds : [];
+
+  papers.forEach(p => {
+    const card = document.createElement("div");
+    const isReady = p.status === "ready";
+    const isFailed = p.status === "failed";
+    const isSelected = isReady && selectedDocIds.includes(p.document_id);
+    card.className = "paper-card" + (isSelected ? " selected" : "");
+    if (isReady) card.onclick = (e) => { if (!e.target.closest("button")) toggleDocSelection(p.document_id); };
+
+    const active = !isReady && !isFailed;
+    const currentStage = active ? stageIndex(p.status) : (isReady ? PIPELINE_STAGES.length : stageIndex(p.status));
+
+    let statusIconHtml, statusText, statusClass = "";
+    if (isReady) { statusIconHtml = "✓"; statusText = "Ready"; statusClass = "ready"; }
+    else if (isFailed) { statusIconHtml = "✕"; statusText = p.error || "Failed"; statusClass = "failed"; }
+    else { statusIconHtml = '<span class="spinner"></span>'; statusText = PIPELINE_STAGES[currentStage] || "Processing"; }
+
+    const dots = PIPELINE_STAGES.map((_, i) => {
+      let cls = "step-dot";
+      if (isFailed) cls += i <= currentStage ? " failed-dot" : "";
+      else if (i < currentStage || isReady) cls += " done";
+      return `<div class="${cls}"></div>`;
+    }).join("");
+
+    card.innerHTML = `
+      <button class="remove-btn" title="Remove" onclick="event.stopPropagation(); removePaper('${p.id}')">×</button>
+      ${isSelected ? '<div class="selected-badge">✓ Selected</div>' : ''}
+      <div class="filename" title="${escapeHtml(p.filename)}">${escapeHtml(p.filename)}</div>
+      <div class="status-line ${statusClass}"><span class="status-icon">${statusIconHtml}</span><span>${escapeHtml(statusText)}</span></div>
+      <div class="step-track">${dots}</div>
+      ${isReady ? `<div class="card-actions"><button class="summarize-btn" ${sending ? "disabled" : ""} onclick="event.stopPropagation(); summarizeDocument('${p.document_id}')">Summarize</button></div>` : ''}
     `;
-    list.appendChild(div);
-    
-    // Modal select
-    const opt = document.createElement("option");
-    opt.value = doc.document_id;
-    opt.textContent = doc.filename;
-    select.appendChild(opt);
+    tray.appendChild(card);
   });
+
+  updateReportButton();
 }
 
+// ---------------------------------------------------------------------------
+// Document selection & deterministic (LLM-free) scope resolution
+// ---------------------------------------------------------------------------
+function toggleDocSelection(documentId) {
+  const conv = getActiveConversation();
+  if (!conv) return;
+  const idx = conv.selectedDocIds.indexOf(documentId);
+  if (idx === -1) conv.selectedDocIds.push(documentId);
+  else conv.selectedDocIds.splice(idx, 1);
+  saveWorkspace();
+  renderPapers();
+}
+
+// Deterministic name-matching — zero LLM cost. If the question mentions a
+// paper by (a meaningful part of) its filename, scope to exactly that paper
+// regardless of click-selection state, so "Summarize the RetentionAI paper"
+// works correctly without requiring the user to select a card first.
+function detectDocumentScopeFromText(question, readyPapers) {
+  const q = question.toLowerCase();
+  const matches = readyPapers.filter(p => {
+    const base = p.filename.replace(/\.pdf$/i, "").toLowerCase();
+    if (base.length > 3 && q.includes(base)) return true;
+    const firstToken = base.split(/[^a-z0-9]+/)[0];
+    return !!firstToken && firstToken.length > 3 && q.includes(firstToken);
+  });
+  return matches.map(p => p.document_id);
+}
+
+// Resolution order: explicit per-card action > names mentioned in the
+// question > manual card selection > the whole ready workspace (broad
+// search default). All deterministic, zero LLM calls.
+function resolveQueryScope(question, forceDocIds) {
+  const readyPapers = papers.filter(p => p.status === "ready");
+  if (forceDocIds && forceDocIds.length) return forceDocIds;
+
+  const named = detectDocumentScopeFromText(question, readyPapers);
+  if (named.length) return named;
+
+  const conv = getActiveConversation();
+  if (conv && conv.selectedDocIds.length) {
+    // Only keep selections that are still actually ready (handles removal).
+    const stillReady = conv.selectedDocIds.filter(id => readyPapers.some(p => p.document_id === id));
+    if (stillReady.length) return stillReady;
+  }
+
+  return readyPapers.map(p => p.document_id);
+}
+
+function updateReportButton() {
+  const readyCount = papers.filter(p => p.status === "ready").length;
+  const btn = document.getElementById("reportBtn");
+  btn.textContent = readyCount > 1 ? "📄 Generate Comparative Report" : "📄 Generate Report";
+  btn.disabled = readyCount === 0 || sending || reportGenerating;
+}
+
+// ---------------------------------------------------------------------------
+// Upload flow
+// ---------------------------------------------------------------------------
 async function handleUpload(e) {
-  const files = e.target.files;
-  if (!files.length) return;
-  
-  const textEl = document.getElementById("uploadText");
-  textEl.textContent = `Uploading ${files.length} file(s)...`;
-  
-  for (let i = 0; i < files.length; i++) {
-    const formData = new FormData();
-    formData.append("file", files[i]);
-    try {
-      await fetch(`${API_BASE}/upload`, { method: "POST", body: formData });
-    } catch(err) {
-      console.error(err);
-    }
-  }
-  
-  textEl.textContent = "Click to upload PDFs";
+  const files = [...e.target.files];
   e.target.value = "";
-  await fetchDocuments();
-}
+  if (!files.length) return;
 
-async function deleteDocument(id) {
-  if (!confirm("Are you sure you want to delete this document?")) return;
-  await fetch(`${API_BASE}/documents/${id}`, { method: "DELETE" });
-  await fetchDocuments();
-  await fetchCollections(); // Update collections if doc was removed
-}
-
-// --- Collections ---
-async function fetchCollections() {
-  const res = await fetch(`${API_BASE}/collections`);
-  const cols = await res.json();
-  const list = document.getElementById("collectionList");
-  list.innerHTML = "";
-  
-  cols.forEach(col => {
-    const div = document.createElement("div");
-    div.className = "collection-item list-item";
-    div.innerHTML = `
-      <div onclick="selectCollection('${col.collection_id}', this.parentElement)" style="flex:1;">
-        ${col.name} <div class="muted">${col.document_ids.length} docs</div>
-      </div>
-      <button class="delete-btn" onclick="deleteCollection('${col.collection_id}', event)">×</button>
-    `;
-    // highlight active
-    if (activeCollectionId === col.collection_id) {
-      div.classList.add("active");
-    }
-    list.appendChild(div);
-  });
-}
-
-function selectCollection(id, element) {
-  activeCollectionId = id;
-  document.querySelectorAll('.collection-item').forEach(el => el.classList.remove('active'));
-  document.getElementById('col-all').classList.remove('active');
-  if (element) {
-    element.classList.add('active');
-  } else if (!id) {
-    document.getElementById('col-all').classList.add('active');
+  for (const file of files) {
+    uploadOne(file);
   }
 }
 
-function openCollectionModal() {
-  document.getElementById("colModal").style.display = "flex";
-}
-function closeCollectionModal() {
-  document.getElementById("colModal").style.display = "none";
+function uploadOne(file) {
+  const localId = "p_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+  const paper = { id: localId, document_id: null, filename: file.name, status: "uploading" };
+  papers.push(paper);
+  renderPapers();
+  renderChat();
+
+  // Animate through the pipeline stages while the real request is in flight.
+  // The backend does parsing/chunking/embedding/indexing in one call, so this
+  // gives honest, readable progress instead of a single opaque spinner.
+  let stage = 0;
+  const stageTimer = setInterval(() => {
+    stage = Math.min(stage + 1, PIPELINE_STAGES.length - 1);
+    paper.status = PIPELINE_STAGES[stage].toLowerCase();
+    renderPapers();
+  }, 550);
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  fetch(`${API_BASE}/upload`, { method: "POST", body: formData })
+    .then(async res => {
+      clearInterval(stageTimer);
+      if (!res.ok) throw new Error(`Upload failed (${res.status})`);
+      const data = await res.json();
+      if (data.status && data.status !== "ok") throw new Error("We couldn't process this PDF.");
+      paper.status = "ready";
+      paper.document_id = data.document_id;
+      paper.filename = data.filename || paper.filename;
+      renderPapers();
+      saveWorkspace();
+    })
+    .catch(err => {
+      clearInterval(stageTimer);
+      paper.status = "failed";
+      paper.error = "We couldn't process this PDF. Please try uploading it again.";
+      renderPapers();
+      saveWorkspace();
+      console.error(err);
+    });
 }
 
-async function createCollection() {
-  const name = document.getElementById("colName").value;
-  const select = document.getElementById("colDocs");
-  const docIds = Array.from(select.selectedOptions).map(opt => opt.value);
-  
-  if (!name || !docIds.length) {
-    alert("Please enter a name and select at least one document.");
+async function removePaper(localId) {
+  const paper = papers.find(p => p.id === localId);
+  if (!paper) return;
+  if (!confirm(`Remove "${paper.filename}" from your workspace?`)) return;
+
+  papers = papers.filter(p => p.id !== localId);
+  // Purge it from every conversation's selection — not just the active one —
+  // so a removed document can never linger as a "selected" scope anywhere.
+  conversations.forEach(c => {
+    c.selectedDocIds = c.selectedDocIds.filter(id => id !== paper.document_id);
+  });
+  renderPapers();
+  renderConversationList();
+  saveWorkspace();
+
+  if (paper.document_id) {
+    try {
+      await fetch(`${API_BASE}/documents/${paper.document_id}`, { method: "DELETE" });
+    } catch (e) {
+      console.error("Failed to remove document from backend:", e);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Chat rendering
+// ---------------------------------------------------------------------------
+function renderChat() {
+  const chat = document.getElementById("chat");
+  const readyCount = papers.filter(p => p.status === "ready").length;
+  const conv = getActiveConversation();
+  const messages = conv ? conv.messages : [];
+
+  if (!messages.length) {
+    chat.innerHTML = readyCount === 0
+      ? `<div class="empty-state">
+           <div class="icon">📄</div>
+           <h2>Upload a paper to get started</h2>
+           <p>VerityRAG reads your PDFs and answers questions using only the evidence they contain — no guessing, no outside knowledge.</p>
+         </div>`
+      : `<div class="empty-state">
+           <div class="icon">💬</div>
+           <h2>Ask anything about your papers</h2>
+           <p>Try "Summarize this paper" or "Compare the methodologies of these papers."</p>
+         </div>`;
     return;
   }
-  
-  await fetch(`${API_BASE}/collections`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, document_ids: docIds })
+
+  const inner = document.createElement("div");
+  inner.className = "chat-inner";
+
+  messages.forEach((m, idx) => {
+    const row = document.createElement("div");
+    row.className = `msg-row ${m.role}`;
+
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+
+    if (m.role === "report") {
+      if (m.pending) {
+        bubble.innerHTML = `
+          <div class="pipeline-status">
+            <div class="stage-text"><span class="spinner"></span> ${escapeHtml(REPORT_STAGES[m.stageIndex] || REPORT_STAGES[0])}...</div>
+          </div>`;
+      } else if (m.error) {
+        bubble.textContent = m.error;
+      } else if (m.report) {
+        bubble.appendChild(renderReportCard(m.report));
+      }
+    } else if (m.pending) {
+      bubble.innerHTML = `<div class="thinking-dots"><span></span><span></span><span></span></div>`;
+    } else if (m.role === "user") {
+      bubble.textContent = m.text;
+    } else {
+      bubble.innerHTML = renderAnswerHtml(m.text);
+      if (m.sources && m.sources.length) {
+        const toggle = document.createElement("div");
+        toggle.className = "sources-toggle";
+        toggle.textContent = `${m.sources.length} source${m.sources.length > 1 ? "s" : ""}`;
+        const list = document.createElement("div");
+        list.className = "sources-list";
+        list.innerHTML = m.sources.map(s => `
+          <div class="source-chip">
+            <span class="src-name">${escapeHtml(s.name)}</span>
+            <span class="src-meta">${s.page ? " · page " + escapeHtml(String(s.page)) : ""}</span>
+            <div class="src-text">"${escapeHtml(s.snippet)}"</div>
+          </div>
+        `).join("");
+        toggle.onclick = () => list.classList.toggle("open");
+        bubble.appendChild(toggle);
+        bubble.appendChild(list);
+      }
+    }
+
+    row.appendChild(bubble);
+    inner.appendChild(row);
   });
-  
-  closeCollectionModal();
-  document.getElementById("colName").value = "";
-  await fetchCollections();
+
+  chat.innerHTML = "";
+  chat.appendChild(inner);
+  scrollChatToBottom();
 }
 
-async function deleteCollection(id, e) {
-  e.stopPropagation();
-  if (!confirm("Delete this collection? Documents will not be deleted.")) return;
-  await fetch(`${API_BASE}/collections/${id}`, { method: "DELETE" });
-  if (activeCollectionId === id) selectCollection(null);
-  await fetchCollections();
+// ---------------------------------------------------------------------------
+// Ask a question
+// ---------------------------------------------------------------------------
+function setSending(state) {
+  sending = state;
+  document.getElementById("sendBtn").disabled = state;
+  document.querySelectorAll(".chip").forEach(c => c.disabled = state);
+  updateReportButton();
 }
 
-// --- Query ---
-async function askQuestion() {
-  const question = document.getElementById("question").value;
-  if (!question.trim()) return;
-  
-  document.getElementById("workspaceContent").style.display = "flex";
-  document.getElementById("answer").textContent = "Researching across documents... Please wait.";
-  document.getElementById("sources").innerHTML = "";
-  document.getElementById("verificationList").innerHTML = "";
-  document.getElementById("verificationStats").textContent = "";
-  
-  const isDeep = document.getElementById("deepResearchToggle").checked;
-  const payload = { question, research_type: isDeep ? "deep" : "simple" };
-  if (activeCollectionId) {
-    payload.collection_id = activeCollectionId;
+async function sendQuestion(forceQuestion, forceDocIds) {
+  if (sending) return;
+  const input = document.getElementById("question");
+  const question = (forceQuestion !== undefined ? forceQuestion : input.value).trim();
+  if (!question) return;
+
+  let conv = getActiveConversation();
+  if (!conv) conv = await createConversation();
+
+  const scopedDocIds = resolveQueryScope(question, forceDocIds);
+
+  if (forceQuestion === undefined) { input.value = ""; autoGrow(input); }
+  conv.messages.push({ role: "user", text: question });
+  if (conv.title === "New conversation") conv.title = deriveConversationTitle(question);
+  conv.updatedAt = Date.now();
+
+  if (!scopedDocIds.length) {
+    conv.messages.push({
+      role: "assistant",
+      text: "Upload at least one paper to get started — I can only answer questions about documents in your current workspace."
+    });
+    saveWorkspace();
+    renderChat();
+    renderConversationList();
+    return;
   }
+
+  const thinkingMsg = { role: "assistant", text: "", pending: true };
+  conv.messages.push(thinkingMsg);
+  renderChat();
+  renderConversationList();
+  setSending(true);
+
+  const isDeep = document.getElementById("deepResearchToggle").checked;
 
   try {
     const res = await fetch(`${API_BASE}/query`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        question,
+        research_type: isDeep ? "deep" : "simple",
+        document_ids: scopedDocIds,
+        session_id: conv.sessionId || null,
+      }),
     });
-    
-    if (!res.ok) throw new Error("Request failed");
-    const data = await res.json();
-    
-    // Render Answer
-    document.getElementById("answer").textContent = data.answer;
-    
-    // Render Sources grouped by doc or just list
-    const sourcesHtml = (data.sources || []).map(s => `
-      <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px dashed #eee;">
-        <div class="muted"><strong>[${s.document_id}, ${s.chunk_id}]</strong> ${s.source} (page ${s.page_number || '?'})</div>
-        <div style="font-size: 14px; margin-top: 5px;">${s.text}</div>
-      </div>
-    `).join("");
-    document.getElementById("sources").innerHTML = sourcesHtml;
-    
-    // Render Analysis Panel
-    const analysisCard = document.getElementById("analysisCard");
-    const analysisContent = document.getElementById("analysisContent");
-    if (data.research_type === "deep") {
-      analysisCard.style.display = "block";
-      document.getElementById("analysisStats").innerHTML = `Iterations: ${data.research_iterations} | Adaptive Queries: ${data.evidence_gaps.length}`;
-      
-      let html = "";
-      if (data.contradictions && data.contradictions.length > 0) {
-        html += `<h4 style="color: #d14b4b; margin-bottom: 5px;">Contradictions (${data.contradictions.length})</h4>`;
-        html += `<ul style="margin-top: 0; padding-left: 20px; font-size: 13px;">` + data.contradictions.map(c => `<li>${c.claim_A || c.claim_text} vs ${c.claim_B || "..."}</li>`).join("") + `</ul>`;
-      }
-      if (data.research_gaps && data.research_gaps.length > 0) {
-        html += `<h4 style="color: #d19b3b; margin-bottom: 5px;">Research Gaps (${data.research_gaps.length})</h4>`;
-        html += `<ul style="margin-top: 0; padding-left: 20px; font-size: 13px;">` + data.research_gaps.map(g => `<li>${g.gap || g}</li>`).join("") + `</ul>`;
-      }
-      if (data.similarities && data.similarities.length > 0) {
-        html += `<h4 style="margin-bottom: 5px;">Similarities (${data.similarities.length})</h4>`;
-        html += `<ul style="margin-top: 0; padding-left: 20px; font-size: 13px;">` + data.similarities.map(s => `<li>${s.finding || s}</li>`).join("") + `</ul>`;
-      }
-      if (data.differences && data.differences.length > 0) {
-        html += `<h4 style="margin-bottom: 5px;">Differences (${data.differences.length})</h4>`;
-        html += `<ul style="margin-top: 0; padding-left: 20px; font-size: 13px;">` + data.differences.map(d => `<li>${d.finding || d}</li>`).join("") + `</ul>`;
-      }
-      if (!html) html = "<div class='muted'>No major cross-paper insights detected.</div>";
-      analysisContent.innerHTML = html;
-    } else {
-      analysisCard.style.display = "none";
-    }
 
-    // Render Verification
-    document.getElementById("confidenceStats").innerHTML = `Confidence: <span style="color: ${data.confidence === 'HIGH' ? '#3b9c5a' : (data.confidence === 'LOW' || data.confidence === 'UNAVAILABLE' ? '#d14b4b' : '#d19b3b')}">${data.confidence}</span>`;
-    
-    // We can use data.claims if available (Phase 6), or data.verification (Phase 3 compat)
-    const verificationData = (data.claims && data.claims.length > 0) ? data.claims : (data.verification || []);
-    
-    if (verificationData && verificationData.length > 0) {
-      let supportedCount = 0;
-      const claimsHtml = verificationData.map(c => {
-        let status = c.verification_status || c.status || "VERIFICATION_UNAVAILABLE";
-        let cls = "unsupported";
-        if (status === "SUPPORTED") { cls = "supported"; supportedCount++; }
-        if (status === "WEAKLY_SUPPORTED") cls = "weakly_supported";
-        if (status === "VERIFICATION_UNAVAILABLE") cls = "verification_unavailable";
-        
-        return `
-          <div class="claim ${cls}">
-            <div class="claim-status" style="color: var(--${cls})">${status}</div>
-            <div class="claim-text">${c.claim_text || c.claim}</div>
-            <div class="claim-evidence">Type: ${c.claim_type || "FACT"} | Evidence: ${c.supporting_evidence || 'N/A'}</div>
-          </div>
-        `;
-      }).join("");
-      
-      document.getElementById("verificationStats").textContent = `${supportedCount} / ${verificationData.length} claims supported`;
-      document.getElementById("verificationList").innerHTML = claimsHtml;
-    } else {
-      document.getElementById("verificationStats").textContent = "No claims verified.";
-    }
-    
+    if (!res.ok) throw new Error(`Request failed (${res.status})`);
+    const data = await res.json();
+
+    const citations = data.structured_citations || data.sources || [];
+    const sources = dedupeSources(citations);
+
+    thinkingMsg.pending = false;
+    thinkingMsg.text = data.answer || "I couldn't find enough information in the uploaded papers to answer this reliably.";
+    thinkingMsg.sources = sources;
   } catch (err) {
-    document.getElementById("answer").textContent = "Error executing query: " + err.message;
+    thinkingMsg.pending = false;
+    thinkingMsg.text = friendlyError(err);
+  } finally {
+    setSending(false);
+    saveWorkspace();
+    renderChat();
+    renderConversationList();
   }
 }
+
+// One-click per-document action (section 4/21): scopes strictly to that
+// document regardless of any current selection or question text.
+function summarizeDocument(documentId) {
+  sendQuestion("Summarize this paper.", [documentId]);
+}
+
+function dedupeSources(citations) {
+  const seen = new Set();
+  const out = [];
+  for (const c of citations) {
+    const name = c.source || c.filename || "Uploaded paper";
+    const page = c.page_number || "";
+    const key = name + "|" + page;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const text = (c.text || "").trim();
+    out.push({ name, page, snippet: text.length > 160 ? text.slice(0, 160) + "…" : text });
+    if (out.length >= 6) break; // keep this tidy, not a full evidence dump
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Report generation
+// ---------------------------------------------------------------------------
+async function generateReport() {
+  if (reportGenerating || sending) return;
+  // Same scoping rule as questions: an active card selection narrows the
+  // report to just those papers; otherwise it covers the whole workspace.
+  const readyDocs = resolveQueryScope("", null);
+  if (!readyDocs.length) return;
+
+  let conv = getActiveConversation();
+  if (!conv) conv = await createConversation();
+
+  reportGenerating = true;
+  setSending(sending); // refreshes disabled states via updateReportButton()
+  updateReportButton();
+
+  const pendingMsg = { role: "report", pending: true, stageIndex: 0 };
+  conv.messages.push(pendingMsg);
+  conv.updatedAt = Date.now();
+  renderChat();
+  renderConversationList();
+
+  // Purely cosmetic staged progress while the one real request is in
+  // flight — retrieval/reranking/generation all happen server-side in a
+  // single call; this just gives the user honest, readable feedback
+  // instead of one opaque spinner (same pattern as the upload pipeline).
+  const stageTimer = setInterval(() => {
+    pendingMsg.stageIndex = Math.min(pendingMsg.stageIndex + 1, REPORT_STAGES.length - 1);
+    renderChat();
+  }, 700);
+
+  try {
+    const res = await fetch(`${API_BASE}/report`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ document_ids: readyDocs }),
+    });
+    clearInterval(stageTimer);
+    if (!res.ok) throw new Error(`Request failed (${res.status})`);
+    const data = await res.json();
+
+    pendingMsg.pending = false;
+    if (!data.ok) {
+      pendingMsg.error = data.error || "We couldn't generate a report right now. Please try again.";
+    } else {
+      pendingMsg.report = data;
+    }
+  } catch (err) {
+    clearInterval(stageTimer);
+    pendingMsg.pending = false;
+    pendingMsg.error = friendlyError(err);
+  } finally {
+    reportGenerating = false;
+    saveWorkspace();
+    renderChat();
+    renderConversationList();
+    updateReportButton();
+  }
+}
+
+function renderReportCard(report) {
+  const card = document.createElement("div");
+  card.className = "report-card";
+
+  let html = `<div class="report-title">${escapeHtml(report.title)}</div>`;
+  html += `<div class="report-overview">${escapeHtml(report.overview)}</div>`;
+
+  (report.papers || []).forEach(p => {
+    const UNAVAILABLE = "Not available in the uploaded evidence";
+    html += `<h4>${escapeHtml(p.title || p.document_id)}</h4>`;
+    [["overview", "Overview"], ["main_contribution", "Main Contribution"], ["methodology", "Methodology"], ["architecture", "Architecture"]]
+      .forEach(([key, label]) => {
+        html += `<div class="field-label">${label}</div><p>${escapeHtml(p[key] || UNAVAILABLE)}</p>`;
+      });
+    [["datasets", "Datasets"], ["evaluation_metrics", "Evaluation Metrics"], ["key_results", "Key Results"], ["important_calculations", "Important Calculations"], ["limitations", "Limitations"]]
+      .forEach(([key, label]) => {
+        const values = p[key] || [];
+        html += `<div class="field-label">${label}</div><ul>${
+          values.length ? values.map(v => `<li>${escapeHtml(v)}</li>`).join("") : `<li>${UNAVAILABLE}</li>`
+        }</ul>`;
+      });
+    html += `<div class="field-label">Final Summary</div><p>${escapeHtml(p.final_summary || UNAVAILABLE)}</p>`;
+  });
+
+  if (report.comparison) {
+    html += `<h4>Comparison</h4><div class="comparison-block">`;
+    const c = report.comparison;
+    [["commonalities", "Commonalities"], ["differences", "Differences"], ["strengths", "Strengths"], ["limitations", "Limitations"]]
+      .forEach(([key, label]) => {
+        if (c[key] && c[key].length) {
+          html += `<div class="field-label">${label}</div><ul>${c[key].map(v => `<li>${escapeHtml(v)}</li>`).join("")}</ul>`;
+        }
+      });
+    html += `</div>`;
+  }
+
+  html += `<h4>Conclusion</h4><p>${escapeHtml(report.conclusion)}</p>`;
+
+  if (!report.evidence_sufficient) {
+    html += `<div class="not-covered">Note: the uploaded documents did not fully cover this report — some sections may be marked as not available.</div>`;
+  }
+
+  html += `<div class="report-downloads">
+    <a href="${API_BASE}/report/${report.report_id}/markdown" target="_blank" rel="noopener">⬇ Markdown</a>
+    <a href="${API_BASE}/report/${report.report_id}/pdf" target="_blank" rel="noopener">⬇ PDF</a>
+    <a href="${API_BASE}/report/${report.report_id}/docx" target="_blank" rel="noopener">⬇ DOCX</a>
+  </div>`;
+
+  card.innerHTML = html;
+  return card;
+}
+
+// ---------------------------------------------------------------------------
+// Conversations (New Chat / New Workspace / history sidebar)
+// ---------------------------------------------------------------------------
+function deriveConversationTitle(question) {
+  let t = (question || "").trim();
+  t = t.replace(/^(what is|what are|what does|what did|explain|describe|summarize|compare|tell me about|can you|please|how does|how do|why is|why does|find)\s+/i, "");
+  t = t.replace(/[?.!]+\s*$/, "").trim();
+  if (!t) return "New conversation";
+  let words = t.split(/\s+/).slice(0, 6).join(" ");
+  if (words.length > 46) words = words.slice(0, 46).trim() + "…";
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+async function createConversation() {
+  let sessionId = null;
+  try {
+    const res = await fetch(`${API_BASE}/sessions`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}),
+    });
+    if (res.ok) sessionId = (await res.json()).session_id || null;
+  } catch (e) {
+    console.error("Failed to create backend session (chat memory for follow-ups will be unavailable):", e);
+  }
+
+  const conv = {
+    id: "c_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
+    title: "New conversation",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    messages: [],
+    selectedDocIds: [],
+    sessionId,
+  };
+  conversations.unshift(conv);
+  activeConversationId = conv.id;
+  saveWorkspace();
+  renderConversationList();
+  renderPapers();
+  renderChat();
+  return conv;
+}
+
+// New Chat: clears the conversation, keeps every uploaded PDF available.
+function newChat() {
+  createConversation();
+  toggleSidebar(false);
+}
+
+// New Workspace: also removes every uploaded PDF — a full reset. Documents
+// are shared infrastructure (one Chroma workspace), so this is the only
+// action that actually deletes them; New Chat never does.
+async function newWorkspace() {
+  if (!papers.length) { newChat(); return; }
+  if (!confirm("Start a new workspace? This removes all uploaded papers, not just the conversation.")) return;
+
+  const toDelete = papers.filter(p => p.document_id);
+  papers = [];
+  renderPapers();
+  saveWorkspace();
+
+  await Promise.all(toDelete.map(p =>
+    fetch(`${API_BASE}/documents/${p.document_id}`, { method: "DELETE" }).catch(e => console.error(e))
+  ));
+
+  await createConversation();
+}
+
+function switchConversation(id) {
+  if (id === activeConversationId) return;
+  activeConversationId = id;
+  saveWorkspace();
+  renderConversationList();
+  renderPapers();   // selection highlighting differs per conversation
+  renderChat();
+  toggleSidebar(false);
+}
+
+function deleteConversation(id, evt) {
+  if (evt) evt.stopPropagation();
+  if (!confirm("Delete this conversation? This cannot be undone.")) return;
+  conversations = conversations.filter(c => c.id !== id);
+  if (activeConversationId === id) {
+    activeConversationId = conversations[0] ? conversations[0].id : null;
+    if (!activeConversationId) { createConversation(); return; }
+  }
+  saveWorkspace();
+  renderConversationList();
+  renderPapers();
+  renderChat();
+}
+
+function renderConversationList() {
+  const list = document.getElementById("conversationList");
+  const titleEl = document.getElementById("convTitle");
+  const sorted = [...conversations].sort((a, b) => b.updatedAt - a.updatedAt);
+
+  list.innerHTML = sorted.map(c => `
+    <div class="conv-item ${c.id === activeConversationId ? "active" : ""}" onclick="switchConversation('${c.id}')">
+      <span class="conv-item-title">${escapeHtml(c.title)}</span>
+      <button class="conv-delete" title="Delete conversation" onclick="deleteConversation('${c.id}', event)">×</button>
+    </div>
+  `).join("") || `<div class="conv-item" style="cursor:default;color:var(--text-faint);">No conversations yet</div>`;
+
+  const active = getActiveConversation();
+  titleEl.textContent = active ? active.title : "New conversation";
+}
+
+function toggleSidebar(force) {
+  const sidebar = document.getElementById("sidebar");
+  const scrim = document.getElementById("sidebarScrim");
+  const open = force !== undefined ? force : !sidebar.classList.contains("open");
+  sidebar.classList.toggle("open", open);
+  scrim.classList.toggle("open", open);
+}
+
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+async function init() {
+  loadWorkspace();
+  if (!conversations.length || !getActiveConversation()) {
+    await createConversation();
+  } else {
+    renderConversationList();
+    renderPapers();
+    renderChat();
+  }
+}
+window.onload = init;
 </script>
 </body>
 </html>

@@ -17,21 +17,27 @@ from config import GROQ_API_KEY
 
 
 PLANNER_PROMPT = """You are a research planning assistant for an academic RAG system.
-Given a user's research question, analyze it and output a JSON object with your research plan.
+Given a user's research question and the previous chat history, analyze the context and output a JSON object with your research plan.
+
+Context is important. If the user asks a follow-up question (e.g., "What about their training data?"), use the chat history to resolve the subject (e.g., "their" -> "Llama 2 and Mistral"). Output the fully resolved query.
 
 Determine:
-1. "mode": One of ["single_paper", "multi_paper", "synthesis"]
+1. "resolved_query": The fully contextualized question, replacing pronouns and implicit references with explicit ones.
+2. "mode": One of ["single_paper", "multi_paper", "synthesis"]
    - single_paper: The question is about a specific detail likely found in one place or paper.
    - multi_paper: The question asks to compare or find information across multiple papers.
    - synthesis: The question asks for a high-level summary, broader concepts, or methodology limitations that require synthesizing evidence from multiple sources.
-2. "needs_decomposition": boolean (true/false)
+3. "needs_decomposition": boolean (true/false)
    - true if the question asks multiple distinct things (e.g. "What is X and what is Y?")
-3. "comparison_dimensions": list of strings (optional, e.g. ["architecture", "datasets", "results", "limitations"]) if this is a multi-paper comparison question.
-4. "reasoning": A brief string explaining your choice.
+4. "comparison_dimensions": list of strings (optional, e.g. ["architecture", "datasets", "results", "limitations"]) if this is a multi-paper comparison question.
+5. "reasoning": A brief string explaining your choice.
 
 Return ONLY valid JSON.
 
-Question: {question}
+Chat History:
+{chat_history}
+
+Current Question: {question}
 JSON Plan:"""
 
 def _fallback_plan(query: str) -> dict[str, Any]:
@@ -45,46 +51,82 @@ def _fallback_plan(query: str) -> dict[str, Any]:
     }
 
 
-def plan_research(state: ResearchState) -> dict[str, Any]:
+def plan_research(state: dict) -> dict:
     """
     Analyzes the query and decides the research mode and decomposition.
+
+    NORMAL mode (research_type != "deep") makes ZERO LLM calls: mode/
+    decomposition are decided heuristically, and the raw question passes
+    straight to retrieval + the single synthesis call. That one call also
+    receives recent chat history directly, so it resolves follow-up
+    references itself ("their" -> the papers already in context) instead of
+    a separate query-rewriting LLM call.
+
+    Only DEEP mode (explicitly requested by the user, never auto-triggered
+    by this planner) uses the LLM-backed planner below.
     """
-    query = state["original_query"]
+    query = state.get("latest_query") or state.get("original_query")
+    research_type = state.get("research_type", "simple")
+
+    if research_type != "deep":
+        plan = _fallback_plan(query)
+        plan["resolved_query"] = query
+        plan["reasoning"] = "Normal mode: heuristic planning only, zero LLM calls."
+        return {
+            "original_query": query,
+            "research_plan": plan,
+            "sub_queries": [query],
+            "research_type": research_type,
+            "status": "planned (heuristic, no LLM call)",
+        }
+
+    # --- DEEP MODE ONLY below this line ---
+    history = state.get("chat_history", [])
+
+    # Format chat history
+    history_text = "None"
+    if history:
+        history_lines = []
+        for msg in history[-4:]:  # Use at most the last 4 messages to avoid blowing up context
+            role = msg.get("role", "unknown")
+            content = msg.get("content", "")
+            history_lines.append(f"{role.capitalize()}: {content}")
+        history_text = "\n".join(history_lines)
+
     plan = None
 
     if GROQ_API_KEY:
         try:
-            raw = _call_groq_raw(PLANNER_PROMPT.format(question=query))
+            raw = _call_groq_raw(PLANNER_PROMPT.format(question=query, chat_history=history_text))
             json_match = re.search(r'\{.*\}', raw, re.DOTALL)
             if json_match:
                 parsed = json.loads(json_match.group())
                 # Validate schema
-                if "mode" in parsed and "needs_decomposition" in parsed and "reasoning" in parsed:
+                if "mode" in parsed and "needs_decomposition" in parsed and "reasoning" in parsed and "resolved_query" in parsed:
                     plan = parsed
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"LLM planner failed: {e}")
+            plan = _fallback_plan(query)
+            plan["resolved_query"] = query
 
     if plan is None:
         plan = _fallback_plan(query)
-        
-    research_type = state.get("research_type", "simple")
-    # If the user didn't explicitly request deep but the query is very complex, we could optionally promote it.
-    # For now, we respect the state's research_type, which defaults to 'simple' from the API.
-    # But if the planner detects a multi_paper comparison, it's safer to promote it to deep research.
-    if plan.get("mode") == "multi_paper" and research_type != "deep":
-        research_type = "deep"
+        plan["resolved_query"] = query
 
-    # If decomposition is needed, call the Phase 2 decomposed utility
-    sub_queries = [query]
+    resolved_query = plan.get("resolved_query", query)
+
+    # If decomposition is needed, call the Phase 2 decomposed utility using the RESOLVED query
+    sub_queries = [resolved_query]
     if plan.get("needs_decomposition", False):
         try:
-            decomposed = decompose_query(query)
+            decomposed = decompose_query(resolved_query)
             if decomposed and len(decomposed) > 0:
                 sub_queries = decomposed
         except Exception:
-            pass # fallback to [query] already set
+            pass # fallback to [resolved_query] already set
 
     return {
+        "original_query": resolved_query, # Update state with resolved query for subsequent steps
         "research_plan": plan,
         "sub_queries": sub_queries,
         "research_type": research_type,

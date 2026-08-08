@@ -5,7 +5,7 @@ pydantic==2.9.2
 python-dotenv==1.0.1
 
 # Retrieval
-chromadb==0.5.5
+chromadb==1.5.9
 fastembed>=0.4.0
 rank-bm25==0.2.2
 sentence-transformers==3.1.1
@@ -22,3 +22,10 @@ pandas==2.2.3
 # Phase 3 Orchestration
 langgraph==0.2.14
 langchain-core==0.2.33
+
+transformers==4.57.6
+tokenizers==0.22.2
+
+# Report generation (Markdown/PDF/DOCX export from validated JSON — no LLM formatting)
+reportlab==5.0.0
+python-docx==1.2.0

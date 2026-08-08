@@ -173,16 +173,33 @@ def assign_confidence(state: ResearchState) -> dict[str, Any]:
     - Number of independent docs
     - Verification status
     - Contradictions
+
+    Deterministic — never calls the LLM itself.
     """
     # 1. Evidence coverage
     docs = state.get("evidence_by_document", {})
     doc_count = len(docs)
-    
+
     # 2. Verification Status
     verifs = state.get("verification_results", [])
+
+    # NORMAL mode never runs a separate verify step, so verification_results
+    # is empty by design — not "verification unavailable". Use the single
+    # synthesis call's own self-assessment instead of treating this the same
+    # as deep mode's real verification-failure case. Deep mode (which DOES
+    # populate verification_results) is unaffected and keeps the branch below.
+    if not verifs and "evidence_sufficient" in state:
+        evidence_sufficient = state.get("evidence_sufficient")
+        grounded = state.get("grounded", evidence_sufficient)
+        if doc_count == 0:
+            return {"confidence": "UNAVAILABLE"}
+        if not evidence_sufficient:
+            return {"confidence": "LOW"}
+        return {"confidence": "HIGH" if grounded else "MEDIUM"}
+
     if not verifs:
         return {"confidence": "UNAVAILABLE"}
-        
+
     supported = sum(1 for v in verifs if v.get("status") == "SUPPORTED")
     unsupported = sum(1 for v in verifs if v.get("status") == "UNSUPPORTED")
     unavailable = sum(1 for v in verifs if v.get("status") == "VERIFICATION_UNAVAILABLE")

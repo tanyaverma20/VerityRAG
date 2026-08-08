@@ -29,11 +29,25 @@ class SentenceTransformerEmbeddingFunction(EmbeddingFunction):
         return [emb.tolist() for emb in embeddings]
 
 _embed_fn = SentenceTransformerEmbeddingFunction()
-_client = chromadb.PersistentClient(path=CHROMA_DIR)
-_collection = _client.get_or_create_collection(
-    name=COLLECTION_NAME, embedding_function=_embed_fn
-)
+_client = None
+_collection = None
 
+def get_chroma_client():
+    global _client
+    if _client is None:
+        from config import CHROMA_DIR
+        import chromadb
+        _client = chromadb.PersistentClient(path=CHROMA_DIR)
+    return _client
+
+def get_collection():
+    global _collection
+    if _collection is None:
+        from config import COLLECTION_NAME
+        _collection = get_chroma_client().get_or_create_collection(
+            name=COLLECTION_NAME, embedding_function=_embed_fn
+        )
+    return _collection
 
 def get_document_id(file_path: str) -> str:
     """Generate a deterministic document ID based on file contents."""
@@ -185,19 +199,27 @@ def chunk_page(page: dict, doc_id: str, start_chunk_idx: int, current_section: s
     return chunks, chunk_idx, current_section
 
 
-def ingest_document(file_path: str) -> dict:
-    """Ingests a single PDF with page/section awareness and deterministic IDs."""
+def ingest_document(file_path: str, original_filename: str | None = None) -> dict:
+    """
+    Ingests a single PDF with page/section awareness and deterministic IDs.
+
+    `original_filename` lets callers preserve the user's real filename when
+    `file_path` points at a temp file (e.g. the /upload endpoint, which copies
+    the upload into a NamedTemporaryFile before this runs). Defaults to the
+    path's own name so bulk-ingestion scripts and tests are unaffected.
+    """
     path = Path(file_path)
+    display_name = original_filename or path.name
     doc_id = get_document_id(str(path))
-    
+
     # 1. Register document in SQLite
-    add_document(doc_id, path.name, status="PROCESSING")
+    add_document(doc_id, display_name, status="PROCESSING")
     
     try:
         pages = extract_pages_from_pdf(str(path))
         if not pages:
             update_document_status(doc_id, status="FAILED", error_message="No text extracted")
-            return {"filename": path.name, "chunks_added": 0, "status": "no_text_extracted"}
+            return {"filename": display_name, "chunks_added": 0, "status": "no_text_extracted"}
 
         all_chunks = []
         chunk_idx = 1
@@ -209,7 +231,7 @@ def ingest_document(file_path: str) -> dict:
 
         if not all_chunks:
             update_document_status(doc_id, status="FAILED", error_message="No text extracted")
-            return {"filename": path.name, "chunks_added": 0, "status": "no_text_extracted"}
+            return {"filename": display_name, "chunks_added": 0, "status": "no_text_extracted"}
 
         ids = [c["chunk_id"] for c in all_chunks]
         texts = [c["text"] for c in all_chunks]
@@ -219,8 +241,8 @@ def ingest_document(file_path: str) -> dict:
         for c in all_chunks:
             metadatas.append({
                 "document_id": c["document_id"],
-                "filename": path.name,
-                "source": path.name,  # for backward compatibility with main.py
+                "filename": display_name,
+                "source": display_name,  # for backward compatibility with main.py
                 "page_number": c["page_number"],
                 "section": c["section"],
                 "chunk_id": c["chunk_id"],
@@ -231,11 +253,12 @@ def ingest_document(file_path: str) -> dict:
         # Check if this document is already in ChromaDB. If it is, delete it first to avoid duplicates.
         # But wait, document_id is deterministic. If it's already indexed, it might not need re-indexing.
         # But just in case, let's delete existing chunks for this document.
-        _collection.delete(where={"document_id": doc_id})
-        _collection.add(documents=texts, ids=ids, metadatas=metadatas)
+        col = get_collection()
+        col.delete(where={"document_id": doc_id})
+        col.add(documents=texts, ids=ids, metadatas=metadatas)
 
         update_document_status(doc_id, status="INDEXED", chunk_count=len(all_chunks))
-        return {"filename": path.name, "chunks_added": len(all_chunks), "status": "ok", "document_id": doc_id}
+        return {"filename": display_name, "chunks_added": len(all_chunks), "status": "ok", "document_id": doc_id}
     
     except Exception as e:
         update_document_status(doc_id, status="FAILED", error_message=str(e))
@@ -244,22 +267,19 @@ def ingest_document(file_path: str) -> dict:
 
 def get_all_chunks() -> list[dict]:
     """Pulls every stored chunk — used to build the BM25 index in retrieval.py."""
-    data = _collection.get()
+    data = get_collection().get()
     return [
         {"id": _id, "text": doc, "metadata": meta}
         for _id, doc, meta in zip(data["ids"], data["documents"], data["metadatas"])
     ]
 
 
-def get_collection():
-    return _collection
-
 
 def delete_document_from_index(document_id: str):
     """Deletes a document from ChromaDB and the SQLite registry."""
     # 1. Delete from ChromaDB
     try:
-        _collection.delete(where={"document_id": document_id})
+        get_collection().delete(where={"document_id": document_id})
     except Exception as e:
         print(f"Failed to delete from Chroma: {e}")
         
