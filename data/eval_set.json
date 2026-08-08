@@ -1,0 +1,12 @@
+[
+  {
+    "question": "What dataset was used to evaluate the model?",
+    "expected_answer_contains": ["dataset name here"],
+    "notes": "Replace this file with real questions once you've ingested your own papers."
+  },
+  {
+    "question": "What was the reported accuracy or F1 score?",
+    "expected_answer_contains": ["metric value here"],
+    "notes": ""
+  }
+]

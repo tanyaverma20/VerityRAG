@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables / secrets
+.env
+.env.*
+!.env.example
+
+# ChromaDB / vector stores
+chroma_store/
+chroma_db/
+data/chroma/
+*.sqlite
+*.sqlite3
+
+# Local datasets / uploaded research papers
+data/*.pdf
+data/uploads/
+data/raw/
+
+# Test/generated files
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp

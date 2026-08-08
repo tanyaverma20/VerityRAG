@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>VerityRAG</title>
+<style>
+  body { font-family: -apple-system, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; color: #222; }
+  h1 { font-size: 22px; font-weight: 500; }
+  .row { display: flex; gap: 24px; margin-top: 24px; }
+  .col { flex: 1; }
+  textarea, input[type=file] { width: 100%; padding: 8px; box-sizing: border-box; }
+  button { padding: 8px 16px; margin-top: 8px; cursor: pointer; }
+  .card { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-top: 12px; }
+  .claim { border-left: 3px solid #ccc; padding-left: 10px; margin-bottom: 8px; }
+  .supported { border-color: #3b9c5a; }
+  .contradicted { border-color: #d14b4b; }
+  .not_found { border-color: #d19b3b; }
+  .score { font-weight: 500; }
+  .muted { color: #777; font-size: 13px; }
+</style>
+</head>
+<body>
+  <h1>VerityRAG</h1>
+  <p class="muted">Upload a paper, ask a question, see the answer verified claim-by-claim.</p>
+
+  <div class="card">
+    <input type="file" id="fileInput" accept=".pdf">
+    <button onclick="uploadFile()">Upload PDF</button>
+    <div id="uploadStatus" class="muted"></div>
+  </div>
+
+  <div class="card">
+    <textarea id="question" rows="2" placeholder="Ask a question about the uploaded papers..."></textarea>
+    <button onclick="askQuestion()">Ask</button>
+  </div>
+
+  <div class="row">
+    <div class="col">
+      <h3>Answer</h3>
+      <div id="answer" class="card"></div>
+      <h3>Sources</h3>
+      <div id="sources"></div>
+    </div>
+    <div class="col">
+      <h3>Verification</h3>
+      <div id="verification"></div>
+    </div>
+  </div>
+
+<script>
+const API_BASE = "http://localhost:8000";
+
+async function uploadFile() {
+  const input = document.getElementById("fileInput");
+  if (!input.files.length) return;
+  const formData = new FormData();
+  formData.append("file", input.files[0]);
+  document.getElementById("uploadStatus").textContent = "Uploading...";
+  const res = await fetch(`${API_BASE}/upload`, { method: "POST", body: formData });
+  const data = await res.json();
+  document.getElementById("uploadStatus").textContent =
+    `Indexed ${data.chunks_added} chunks from ${data.filename}`;
+}
+
+async function askQuestion() {
+  const question = document.getElementById("question").value;
+  if (!question.trim()) return;
+  document.getElementById("answer").textContent = "Thinking...";
+  document.getElementById("sources").innerHTML = "";
+  document.getElementById("verification").innerHTML = "";
+
+  const res = await fetch(`${API_BASE}/query`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question }),
+  });
+  const data = await res.json();
+
+  document.getElementById("answer").textContent = data.answer;
+
+  const sourcesHtml = (data.sources || []).map(s => `
+    <div class="card">
+      <div class="muted">${s.source} · ${s.retrieval_method} · score ${s.rerank_score}</div>
+      <div>${s.text}</div>
+    </div>
+  `).join("");
+  document.getElementById("sources").innerHTML = sourcesHtml;
+
+  if (data.verification) {
+    const v = data.verification;
+    const claimsHtml = v.claims.map(c => `
+      <div class="claim ${c.label}">
+        <div><strong>${c.label}</strong> (confidence ${c.confidence})</div>
+        <div>${c.claim}</div>
+        ${c.evidence ? `<div class="muted">Evidence: ${c.evidence}</div>` : ""}
+      </div>
+    `).join("");
+    document.getElementById("verification").innerHTML = `
+      <div class="card">
+        <div class="score">Groundedness: ${(v.groundedness_score * 100).toFixed(0)}% (${v.num_supported}/${v.num_claims} claims supported)</div>
+      </div>
+      ${claimsHtml}
+    `;
+  }
+}
+</script>
+</body>
+</html>
