@@ -59,6 +59,15 @@ def log_query_event(
     errors: list[str] | None = None,
     model_name: str = "",
     prompt_version: str = "v1",
+    # --- Phase 6 Adaptive Fields ---
+    research_type: str = "simple",
+    research_iterations: int = 1,
+    adaptive_queries: int = 0,
+    evidence_gaps: int = 0,
+    contradiction_count: int = 0,
+    research_gap_count: int = 0,
+    confidence: str = "UNAVAILABLE",
+    # -------------------------------
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
@@ -92,6 +101,13 @@ def log_query_event(
         "errors": errors or [],
         "model_name": model_name,
         "prompt_version": prompt_version,
+        "research_type": research_type,
+        "research_iterations": research_iterations,
+        "adaptive_queries": adaptive_queries,
+        "evidence_gaps": evidence_gaps,
+        "contradiction_count": contradiction_count,
+        "research_gap_count": research_gap_count,
+        "confidence": confidence,
     }
     if extra:
         event["extra"] = extra

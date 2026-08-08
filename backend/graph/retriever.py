@@ -16,12 +16,19 @@ def retrieve_evidence(state: ResearchState) -> dict[str, Any]:
     """
     Executes Phase 2 retrieve() for each sub_query, aggregating results.
     """
-    sub_queries = state.get("sub_queries", [state["original_query"]])
+    sub_queries = state.get("sub_queries") or [state["original_query"]]
+    completed_sub_queries = state.get("completed_sub_queries") or []
     document_ids = state.get("document_ids", None)
     
-    all_chunks = []
+    # We want to keep existing chunks in the state
+    all_chunks = state.get("retrieval_results") or []
+    
+    newly_completed = list(completed_sub_queries)
     
     for sq in sub_queries:
+        if sq in newly_completed:
+            continue
+            
         try:
             chunks = retrieve(
                 query=sq,
@@ -32,16 +39,15 @@ def retrieve_evidence(state: ResearchState) -> dict[str, Any]:
                 apply_token_budget=True,
             )
             all_chunks.extend(chunks)
+            newly_completed.append(sq)
         except Exception:
             pass # continue with other queries if one fails
             
     # Deduplicate chunks retrieved across different sub_queries
     unique_chunks = deduplicate_chunks(all_chunks)
     
-    # Optionally, we could apply another token budget selection here over the merged pool,
-    # but for simplicity, we pass all retrieved unique chunks down to the organizer.
-    
     return {
         "retrieval_results": unique_chunks,
+        "completed_sub_queries": newly_completed,
         "status": f"retrieved {len(unique_chunks)} chunks"
     }

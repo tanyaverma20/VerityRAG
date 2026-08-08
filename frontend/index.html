@@ -30,6 +30,9 @@
   .header button { padding: 12px 24px; font-size: 16px; background: #222; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; }
   .header button:hover { background: #444; }
   
+  .toggle-container { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: #555; }
+  .toggle-checkbox { width: 18px; height: 18px; cursor: pointer; }
+  
   .content { flex: 1; overflow-y: auto; padding: 30px; display: flex; gap: 30px; }
   
   /* Answer Panel */
@@ -91,6 +94,10 @@
   <div class="main">
     <div class="header">
       <input type="text" id="question" placeholder="Ask a research question (e.g. Compare the training datasets in these papers...)">
+      <div class="toggle-container">
+        <input type="checkbox" id="deepResearchToggle" class="toggle-checkbox">
+        <label for="deepResearchToggle">Deep Research</label>
+      </div>
       <button onclick="askQuestion()">Research</button>
     </div>
     
@@ -108,8 +115,15 @@
       </div>
       
       <div class="meta-panel">
+        <div class="card" id="analysisCard" style="display: none;">
+          <h3>Cross-Paper Analysis</h3>
+          <div id="analysisStats" style="margin-bottom: 10px; font-weight: 600; font-size: 14px; color: #333;"></div>
+          <div id="analysisContent"></div>
+        </div>
+      
         <div class="card">
-          <h3>Claim Verification</h3>
+          <h3>Claim Verification & Graph</h3>
+          <div id="confidenceStats" style="margin-bottom: 5px; font-weight: 600; font-size: 14px;"></div>
           <div id="verificationStats" style="margin-bottom: 15px; font-weight: 500;"></div>
           <div id="verificationList"></div>
         </div>
@@ -283,7 +297,8 @@ async function askQuestion() {
   document.getElementById("verificationList").innerHTML = "";
   document.getElementById("verificationStats").textContent = "";
   
-  const payload = { question };
+  const isDeep = document.getElementById("deepResearchToggle").checked;
+  const payload = { question, research_type: isDeep ? "deep" : "simple" };
   if (activeCollectionId) {
     payload.collection_id = activeCollectionId;
   }
@@ -310,25 +325,61 @@ async function askQuestion() {
     `).join("");
     document.getElementById("sources").innerHTML = sourcesHtml;
     
+    // Render Analysis Panel
+    const analysisCard = document.getElementById("analysisCard");
+    const analysisContent = document.getElementById("analysisContent");
+    if (data.research_type === "deep") {
+      analysisCard.style.display = "block";
+      document.getElementById("analysisStats").innerHTML = `Iterations: ${data.research_iterations} | Adaptive Queries: ${data.evidence_gaps.length}`;
+      
+      let html = "";
+      if (data.contradictions && data.contradictions.length > 0) {
+        html += `<h4 style="color: #d14b4b; margin-bottom: 5px;">Contradictions (${data.contradictions.length})</h4>`;
+        html += `<ul style="margin-top: 0; padding-left: 20px; font-size: 13px;">` + data.contradictions.map(c => `<li>${c.claim_A || c.claim_text} vs ${c.claim_B || "..."}</li>`).join("") + `</ul>`;
+      }
+      if (data.research_gaps && data.research_gaps.length > 0) {
+        html += `<h4 style="color: #d19b3b; margin-bottom: 5px;">Research Gaps (${data.research_gaps.length})</h4>`;
+        html += `<ul style="margin-top: 0; padding-left: 20px; font-size: 13px;">` + data.research_gaps.map(g => `<li>${g.gap || g}</li>`).join("") + `</ul>`;
+      }
+      if (data.similarities && data.similarities.length > 0) {
+        html += `<h4 style="margin-bottom: 5px;">Similarities (${data.similarities.length})</h4>`;
+        html += `<ul style="margin-top: 0; padding-left: 20px; font-size: 13px;">` + data.similarities.map(s => `<li>${s.finding || s}</li>`).join("") + `</ul>`;
+      }
+      if (data.differences && data.differences.length > 0) {
+        html += `<h4 style="margin-bottom: 5px;">Differences (${data.differences.length})</h4>`;
+        html += `<ul style="margin-top: 0; padding-left: 20px; font-size: 13px;">` + data.differences.map(d => `<li>${d.finding || d}</li>`).join("") + `</ul>`;
+      }
+      if (!html) html = "<div class='muted'>No major cross-paper insights detected.</div>";
+      analysisContent.innerHTML = html;
+    } else {
+      analysisCard.style.display = "none";
+    }
+
     // Render Verification
-    if (data.verification && data.verification.length > 0) {
+    document.getElementById("confidenceStats").innerHTML = `Confidence: <span style="color: ${data.confidence === 'HIGH' ? '#3b9c5a' : (data.confidence === 'LOW' || data.confidence === 'UNAVAILABLE' ? '#d14b4b' : '#d19b3b')}">${data.confidence}</span>`;
+    
+    // We can use data.claims if available (Phase 6), or data.verification (Phase 3 compat)
+    const verificationData = (data.claims && data.claims.length > 0) ? data.claims : (data.verification || []);
+    
+    if (verificationData && verificationData.length > 0) {
       let supportedCount = 0;
-      const claimsHtml = data.verification.map(c => {
+      const claimsHtml = verificationData.map(c => {
+        let status = c.verification_status || c.status || "VERIFICATION_UNAVAILABLE";
         let cls = "unsupported";
-        if (c.status === "SUPPORTED") { cls = "supported"; supportedCount++; }
-        if (c.status === "WEAKLY_SUPPORTED") cls = "weakly_supported";
-        if (c.status === "VERIFICATION_UNAVAILABLE") cls = "verification_unavailable";
+        if (status === "SUPPORTED") { cls = "supported"; supportedCount++; }
+        if (status === "WEAKLY_SUPPORTED") cls = "weakly_supported";
+        if (status === "VERIFICATION_UNAVAILABLE") cls = "verification_unavailable";
         
         return `
           <div class="claim ${cls}">
-            <div class="claim-status" style="color: var(--${cls})">${c.status}</div>
-            <div class="claim-text">${c.claim}</div>
-            <div class="claim-evidence">Evidence: ${c.supporting_evidence || 'N/A'}</div>
+            <div class="claim-status" style="color: var(--${cls})">${status}</div>
+            <div class="claim-text">${c.claim_text || c.claim}</div>
+            <div class="claim-evidence">Type: ${c.claim_type || "FACT"} | Evidence: ${c.supporting_evidence || 'N/A'}</div>
           </div>
         `;
       }).join("");
       
-      document.getElementById("verificationStats").textContent = `${supportedCount} / ${data.verification.length} claims supported`;
+      document.getElementById("verificationStats").textContent = `${supportedCount} / ${verificationData.length} claims supported`;
       document.getElementById("verificationList").innerHTML = claimsHtml;
     } else {
       document.getElementById("verificationStats").textContent = "No claims verified.";

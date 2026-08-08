@@ -66,6 +66,13 @@ def plan_research(state: ResearchState) -> dict[str, Any]:
 
     if plan is None:
         plan = _fallback_plan(query)
+        
+    research_type = state.get("research_type", "simple")
+    # If the user didn't explicitly request deep but the query is very complex, we could optionally promote it.
+    # For now, we respect the state's research_type, which defaults to 'simple' from the API.
+    # But if the planner detects a multi_paper comparison, it's safer to promote it to deep research.
+    if plan.get("mode") == "multi_paper" and research_type != "deep":
+        research_type = "deep"
 
     # If decomposition is needed, call the Phase 2 decomposed utility
     sub_queries = [query]
@@ -80,5 +87,6 @@ def plan_research(state: ResearchState) -> dict[str, Any]:
     return {
         "research_plan": plan,
         "sub_queries": sub_queries,
+        "research_type": research_type,
         "status": "planned"
     }

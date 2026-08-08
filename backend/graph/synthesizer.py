@@ -19,6 +19,9 @@ Answer the following question using ONLY the provided evidence.
 
 QUESTION: {question}
 
+CROSS-PAPER INSIGHTS:
+{insights_text}
+
 EVIDENCE (Grouped by Document):
 {evidence_text}
 
@@ -30,16 +33,25 @@ INSTRUCTIONS:
 5. Do NOT invent Document IDs or Chunk IDs. Use only the ones provided.
 {format_instructions}
 
-Answer with inline citations:
+IMPORTANT: You MUST output your response as a valid JSON object with two fields:
+- "draft_answer": A string containing your fully formatted answer with inline citations.
+- "claims": A list of dictionaries representing the key claims you made. Each dictionary MUST have:
+  - "claim_id": A unique string ID (e.g. "claim_1")
+  - "claim_text": The actual statement/claim
+  - "claim_type": "FACT", "COMPARISON", "SYNTHESIS", "CONTRADICTORY", or "RESEARCH_GAP"
+
+JSON:
 """
 
 MULTI_PAPER_FORMAT = """
-Because this is a multi-paper comparison, please structure your answer clearly with the following headings if applicable:
+Because this is a multi-paper comparison, please structure your draft_answer clearly with the following headings if applicable:
 - Executive Summary
 - Comparison (across detected dimensions)
 - Paper-by-Paper Findings
 - Key Similarities
 - Key Differences
+- Contradictions / Disagreements
+- Research Gaps
 - Limitations
 - Conclusion
 """
@@ -85,15 +97,32 @@ def synthesize_answer(state: ResearchState) -> dict[str, Any]:
                 })
                 
     plan = state.get("research_plan", {})
-    format_instructions = MULTI_PAPER_FORMAT if plan.get("mode") in ["multi_paper", "synthesis"] else ""
+    format_instructions = MULTI_PAPER_FORMAT if (state.get("research_type") == "deep" or plan.get("mode") in ["multi_paper", "synthesis"]) else ""
+    
+    # Inject cross-paper insights
+    insights_parts = []
+    if state.get("similarities"): insights_parts.append(f"Similarities: {state.get('similarities')}")
+    if state.get("differences"): insights_parts.append(f"Differences: {state.get('differences')}")
+    if state.get("contradictions"): insights_parts.append(f"Contradictions: {state.get('contradictions')}")
+    if state.get("research_gaps"): insights_parts.append(f"Research Gaps: {state.get('research_gaps')}")
+    
+    insights_text = "\n".join(insights_parts) if insights_parts else "None detected."
     
     evidence_text = "\n".join(evidence_parts)
-    prompt = SYNTHESIS_PROMPT.format(question=question, evidence_text=evidence_text, format_instructions=format_instructions)
+    prompt = SYNTHESIS_PROMPT.format(question=question, insights_text=insights_text, evidence_text=evidence_text, format_instructions=format_instructions)
     
     draft_answer = ""
+    claims = []
+    
     if GROQ_API_KEY:
         try:
-            draft_answer = _call_groq_raw(prompt)
+            import re
+            raw = _call_groq_raw(prompt)
+            match = re.search(r'\{.*\}', raw, re.DOTALL)
+            if match:
+                parsed = json.loads(match.group())
+                draft_answer = parsed.get("draft_answer", "")
+                claims = parsed.get("claims", [])
         except Exception:
             pass
             
@@ -102,6 +131,7 @@ def synthesize_answer(state: ResearchState) -> dict[str, Any]:
         
     return {
         "draft_answer": draft_answer,
+        "claims": claims,
         "citations": citations_list,
         "status": "synthesized"
     }

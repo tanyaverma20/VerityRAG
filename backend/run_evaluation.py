@@ -183,6 +183,13 @@ def evaluate_question(
         verification_statuses=[r.get("status", "") for r in graph_verif],
         retry_count=graph_state.get("retry_count", 0),
         total_latency_s=graph_latency,
+        research_type=graph_state.get("research_type", "simple"),
+        research_iterations=graph_state.get("research_iterations", 1),
+        adaptive_queries=len(graph_state.get("adaptive_queries", [])),
+        evidence_gaps=len(graph_state.get("evidence_gaps", [])),
+        contradiction_count=len(graph_state.get("contradictions", [])),
+        research_gap_count=len(graph_state.get("research_gaps", [])),
+        confidence=graph_state.get("confidence", "UNAVAILABLE")
     )
 
     result["baselines"]["agentic_graph"] = {

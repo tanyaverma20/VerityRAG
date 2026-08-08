@@ -221,7 +221,7 @@ def test_retry_limit():
     }
     route = route_verification(state)
     # The constant END is a special variable from langgraph, which evaluates to "__end__"
-    assert route == "__end__", f"Must proceed to END when retry_count >= 1, got {route}"
+    assert route == "assign_confidence", f"Must proceed to assign_confidence when retry_count >= 1, got {route}"
 
 # ---------------------------------------------------------------------------
 # TEST 13 — Retry behavior
@@ -269,6 +269,7 @@ def test_api_backward_compatibility():
         document_ids = None
         collection_id = None
         strategy = "hybrid"
+        research_type = "simple"
         
     res = main.query(MockRequest())
     assert "answer" in res, "Must return 'answer'"

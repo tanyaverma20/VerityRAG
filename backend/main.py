@@ -44,6 +44,7 @@ class QueryRequest(BaseModel):
     # Or restrict to a collection
     collection_id: str | None = None
     strategy: str = "hybrid"
+    research_type: str = "simple"  # "simple" or "deep"
 
 class CollectionCreateRequest(BaseModel):
     name: str
@@ -145,6 +146,7 @@ def query(request: QueryRequest):
     initial_state = {
         "original_query": request.question,
         "document_ids": target_document_ids,
+        "research_type": getattr(request, "research_type", "simple"),
     }
     
     # Run the graph
@@ -153,24 +155,37 @@ def query(request: QueryRequest):
     except Exception as e:
         # Fallback to Phase 2 retrieval if graph fails
         print(f"Graph execution failed: {e}")
-        chunks = retrieve(
-            request.question,
-            strategy=request.strategy,
-            document_ids=request.document_ids,
-            top_k=request.top_k,
-        )
+        try:
+            chunks = retrieve(
+                request.question,
+                strategy=request.strategy,
+                document_ids=request.document_ids,
+                top_k=request.top_k,
+            )
+        except Exception as err:
+            chunks = []
+            
         if not chunks:
             return {
-                "answer": "No documents have been ingested yet, or nothing relevant was found.",
+                "answer": "Error executing query or no chunks found.",
                 "sources": [],
-                "verification": None,
+                "structured_citations": [],
+                "documents_found": 0,
+                "verification": []
             }
         sources_text = "\n---\n".join(
             f"[{i+1}] (source: {c['metadata']['source']}) {c['text']}"
             for i, c in enumerate(chunks)
         )
-        generation = call_llm(ANSWER_PROMPT.format(question=request.question, sources=sources_text))
-        verification = verify_answer(generation["text"], chunks)
+        try:
+            generation = call_llm(ANSWER_PROMPT.format(question=request.question, sources=sources_text))
+        except Exception as e:
+            generation = {"text": "Fallback Answer: LLM unavailable."}
+            
+        try:
+            verification = verify_answer(generation["text"], chunks)
+        except Exception:
+            verification = []
         return {
             "answer": generation["text"],
             "sources": [
@@ -198,30 +213,27 @@ def query(request: QueryRequest):
         return {
             "answer": "No documents have been ingested yet, or nothing relevant was found.",
             "sources": [],
-            "verification": None,
+            "structured_citations": [],
+            "verification": [],
+            "documents_found": 0,
         }
 
     return {
-        "answer": final_state.get("draft_answer", ""),
-        # Map original chunks for backward compatibility
-        "sources": [
-            {
-                "source": c["metadata"]["source"],
-                "document_id": c["metadata"].get("document_id", ""),
-                "chunk_id": c["metadata"].get("chunk_id", ""),
-                "parent_id": c["metadata"].get("parent_id", ""),
-                "page_number": c["metadata"].get("page_number"),
-                "section": c["metadata"].get("section", ""),
-                "text": c["text"],
-                "retrieval_method": c.get("source_method", ""),
-                "rerank_score": round(c.get("rerank_score", 0), 3),
-                "rrf_score": round(c.get("rrf_score", 0), 6),
-            }
-            for c in chunks
-        ],
+        "answer": final_state.get("draft_answer", "Error generating answer."),
+        "sources": final_state.get("citations", []),
         "structured_citations": final_state.get("citations", []),
         "documents_found": get_contributing_documents(chunks),
         "verification": final_state.get("verification_results", []),
-        "latency_seconds": round(time.time() - start, 3),
+        "research_type": final_state.get("research_type", request.research_type),
+        "research_iterations": final_state.get("research_iterations", 1),
+        "evidence_gaps": final_state.get("evidence_gaps", []),
+        "similarities": final_state.get("similarities", []),
+        "differences": final_state.get("differences", []),
+        "contradictions": final_state.get("contradictions", []),
+        "research_gaps": final_state.get("research_gaps", []),
+        "claims": final_state.get("claims", []),
+        "confidence": final_state.get("confidence", "UNAVAILABLE"),
+        "status": final_state.get("status", "OK"),
+        "latency_s": round(time.time() - start, 2),
         "research_plan": final_state.get("research_plan", {}),
     }
