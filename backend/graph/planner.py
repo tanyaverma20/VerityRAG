@@ -26,7 +26,8 @@ Determine:
    - synthesis: The question asks for a high-level summary, broader concepts, or methodology limitations that require synthesizing evidence from multiple sources.
 2. "needs_decomposition": boolean (true/false)
    - true if the question asks multiple distinct things (e.g. "What is X and what is Y?")
-3. "reasoning": A brief string explaining your choice.
+3. "comparison_dimensions": list of strings (optional, e.g. ["architecture", "datasets", "results", "limitations"]) if this is a multi-paper comparison question.
+4. "reasoning": A brief string explaining your choice.
 
 Return ONLY valid JSON.
 
@@ -39,6 +40,7 @@ def _fallback_plan(query: str) -> dict[str, Any]:
     return {
         "mode": "multi_paper" if is_complex else "single_paper",
         "needs_decomposition": is_complex,
+        "comparison_dimensions": ["methodology", "results"] if is_complex else [],
         "reasoning": "Fallback to heuristic planning due to LLM unavailability or failure."
     }
 

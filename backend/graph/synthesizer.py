@@ -28,8 +28,20 @@ INSTRUCTIONS:
 3. If the evidence is insufficient to answer the question, explicitly state: "Insufficient evidence in the retrieved papers."
 4. Do NOT hallucinate or include outside knowledge.
 5. Do NOT invent Document IDs or Chunk IDs. Use only the ones provided.
+{format_instructions}
 
 Answer with inline citations:
+"""
+
+MULTI_PAPER_FORMAT = """
+Because this is a multi-paper comparison, please structure your answer clearly with the following headings if applicable:
+- Executive Summary
+- Comparison (across detected dimensions)
+- Paper-by-Paper Findings
+- Key Similarities
+- Key Differences
+- Limitations
+- Conclusion
 """
 
 def synthesize_answer(state: ResearchState) -> dict[str, Any]:
@@ -72,8 +84,11 @@ def synthesize_answer(state: ResearchState) -> dict[str, Any]:
                     "section": child.get("section", ""),
                 })
                 
+    plan = state.get("research_plan", {})
+    format_instructions = MULTI_PAPER_FORMAT if plan.get("mode") in ["multi_paper", "synthesis"] else ""
+    
     evidence_text = "\n".join(evidence_parts)
-    prompt = SYNTHESIS_PROMPT.format(question=question, evidence_text=evidence_text)
+    prompt = SYNTHESIS_PROMPT.format(question=question, evidence_text=evidence_text, format_instructions=format_instructions)
     
     draft_answer = ""
     if GROQ_API_KEY:

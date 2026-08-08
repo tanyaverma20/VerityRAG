@@ -102,7 +102,14 @@ def test_retrieval():
     # Build BM25 index which depends on Chroma content
     build_bm25_index()
     
-    results = hybrid_retrieve("attention mechanism", top_k=2)
+    # Use retrieve() which supports document_ids filtering
+    from retrieval import retrieve
+    results = retrieve(
+        "attention mechanism", 
+        strategy="hybrid",
+        top_k=2, 
+        document_ids=[get_document_id("../data/attention.pdf")]
+    )
     assert len(results) > 0, "Retrieval returned zero results"
     
     res = results[0]

@@ -13,6 +13,7 @@ from pypdf import PdfReader
 from sentence_transformers import SentenceTransformer
 
 from config import CHROMA_DIR, COLLECTION_NAME, CHUNK_SIZE, CHUNK_OVERLAP
+from database import add_document, update_document_status, delete_document as db_delete_document
 
 # Compatibility wrapper: uses sentence-transformers directly (already installed).
 # Preserves the original embedding model: sentence-transformers/all-MiniLM-L6-v2
@@ -189,41 +190,56 @@ def ingest_document(file_path: str) -> dict:
     path = Path(file_path)
     doc_id = get_document_id(str(path))
     
-    pages = extract_pages_from_pdf(str(path))
-    if not pages:
-        return {"filename": path.name, "chunks_added": 0, "status": "no_text_extracted"}
-
-    all_chunks = []
-    chunk_idx = 1
-    current_section = "Unknown"
+    # 1. Register document in SQLite
+    add_document(doc_id, path.name, status="PROCESSING")
     
-    for page in pages:
-        page_chunks, chunk_idx, current_section = chunk_page(page, doc_id, chunk_idx, current_section)
-        all_chunks.extend(page_chunks)
+    try:
+        pages = extract_pages_from_pdf(str(path))
+        if not pages:
+            update_document_status(doc_id, status="FAILED", error_message="No text extracted")
+            return {"filename": path.name, "chunks_added": 0, "status": "no_text_extracted"}
 
-    if not all_chunks:
-        return {"filename": path.name, "chunks_added": 0, "status": "no_text_extracted"}
+        all_chunks = []
+        chunk_idx = 1
+        current_section = "Unknown"
+        
+        for page in pages:
+            page_chunks, chunk_idx, current_section = chunk_page(page, doc_id, chunk_idx, current_section)
+            all_chunks.extend(page_chunks)
 
-    ids = [c["chunk_id"] for c in all_chunks]
-    texts = [c["text"] for c in all_chunks]
+        if not all_chunks:
+            update_document_status(doc_id, status="FAILED", error_message="No text extracted")
+            return {"filename": path.name, "chunks_added": 0, "status": "no_text_extracted"}
+
+        ids = [c["chunk_id"] for c in all_chunks]
+        texts = [c["text"] for c in all_chunks]
+        
+        # Chroma metadata doesn't accept complex types or None. Must be str, int, float, or bool.
+        metadatas = []
+        for c in all_chunks:
+            metadatas.append({
+                "document_id": c["document_id"],
+                "filename": path.name,
+                "source": path.name,  # for backward compatibility with main.py
+                "page_number": c["page_number"],
+                "section": c["section"],
+                "chunk_id": c["chunk_id"],
+                "parent_id": c["parent_id"],
+                "chunk_type": c["chunk_type"]
+            })
+
+        # Check if this document is already in ChromaDB. If it is, delete it first to avoid duplicates.
+        # But wait, document_id is deterministic. If it's already indexed, it might not need re-indexing.
+        # But just in case, let's delete existing chunks for this document.
+        _collection.delete(where={"document_id": doc_id})
+        _collection.add(documents=texts, ids=ids, metadatas=metadatas)
+
+        update_document_status(doc_id, status="INDEXED", chunk_count=len(all_chunks))
+        return {"filename": path.name, "chunks_added": len(all_chunks), "status": "ok", "document_id": doc_id}
     
-    # Chroma metadata doesn't accept complex types or None. Must be str, int, float, or bool.
-    metadatas = []
-    for c in all_chunks:
-        metadatas.append({
-            "document_id": c["document_id"],
-            "filename": path.name,
-            "source": path.name,  # for backward compatibility with main.py
-            "page_number": c["page_number"],
-            "section": c["section"],
-            "chunk_id": c["chunk_id"],
-            "parent_id": c["parent_id"],
-            "chunk_type": c["chunk_type"]
-        })
-
-    _collection.add(documents=texts, ids=ids, metadatas=metadatas)
-
-    return {"filename": path.name, "chunks_added": len(all_chunks), "status": "ok", "document_id": doc_id}
+    except Exception as e:
+        update_document_status(doc_id, status="FAILED", error_message=str(e))
+        raise e
 
 
 def get_all_chunks() -> list[dict]:
@@ -237,3 +253,17 @@ def get_all_chunks() -> list[dict]:
 
 def get_collection():
     return _collection
+
+
+def delete_document_from_index(document_id: str):
+    """Deletes a document from ChromaDB and the SQLite registry."""
+    # 1. Delete from ChromaDB
+    try:
+        _collection.delete(where={"document_id": document_id})
+    except Exception as e:
+        print(f"Failed to delete from Chroma: {e}")
+        
+    # 2. Delete from SQLite Registry
+    db_delete_document(document_id)
+    
+    # 3. Note: BM25 index must be rebuilt after this in the main API layer.

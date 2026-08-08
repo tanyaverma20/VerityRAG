@@ -1,12 +1,1903 @@
 [
   {
-    "question": "What dataset was used to evaluate the model?",
-    "expected_answer_contains": ["dataset name here"],
-    "notes": "Replace this file with real questions once you've ingested your own papers."
+    "id": "q001",
+    "question": "What is the Transformer architecture and how does the attention mechanism work?",
+    "question_type": "factual",
+    "expected_answer_contains": [
+      "attention",
+      "encoder",
+      "decoder",
+      "multi-head"
+    ],
+    "relevant_document_ids": [
+      "bdfaa68d8984f0dc"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
   },
   {
-    "question": "What was the reported accuracy or F1 score?",
-    "expected_answer_contains": ["metric value here"],
-    "notes": ""
+    "id": "q002",
+    "question": "How is BERT pre-trained and what are the two main pre-training tasks?",
+    "question_type": "factual",
+    "expected_answer_contains": [
+      "masked",
+      "next sentence",
+      "pre-training"
+    ],
+    "relevant_document_ids": [
+      "5692a5514787a8c6"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q003",
+    "question": "Describe the Text-to-Text Transfer Transformer (T5) framework.",
+    "question_type": "factual",
+    "expected_answer_contains": [
+      "text-to-text",
+      "transfer learning",
+      "transformer"
+    ],
+    "relevant_document_ids": [
+      "ad07e47cedf437a4"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q004",
+    "question": "How does REALM integrate retrieval during language model pre-training?",
+    "question_type": "factual",
+    "expected_answer_contains": [
+      "retrieval",
+      "pre-training",
+      "knowledge",
+      "augment"
+    ],
+    "relevant_document_ids": [
+      "0ec1a7ab3de5514c"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q005",
+    "question": "What is the difference between RAG-Sequence and RAG-Token models?",
+    "question_type": "factual",
+    "expected_answer_contains": [
+      "sequence",
+      "token",
+      "generation",
+      "marginalize"
+    ],
+    "relevant_document_ids": [
+      "23e3249e9a1e7541"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q006",
+    "question": "How does Dense Passage Retrieval (DPR) construct its dual-encoder architecture?",
+    "question_type": "factual",
+    "expected_answer_contains": [
+      "dual-encoder",
+      "dense",
+      "passage",
+      "question"
+    ],
+    "relevant_document_ids": [
+      "3e67fc1a9977715a"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q007",
+    "question": "What is the parameter count and architecture of GPT-3?",
+    "question_type": "factual",
+    "expected_answer_contains": [
+      "175 billion",
+      "transformer",
+      "autoregressive"
+    ],
+    "relevant_document_ids": [
+      "97fd272f1fdfc186"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q008",
+    "question": "Describe the sliding window attention mechanism used in Mistral 7B.",
+    "question_type": "factual",
+    "expected_answer_contains": [
+      "sliding window",
+      "attention",
+      "efficiency",
+      "cache"
+    ],
+    "relevant_document_ids": [
+      "653b29619eae2ae4"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q009",
+    "question": "What are the key safety and alignment techniques used for Llama 2 Chat?",
+    "question_type": "factual",
+    "expected_answer_contains": [
+      "rlhf",
+      "safety",
+      "alignment",
+      "reward"
+    ],
+    "relevant_document_ids": [
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q010",
+    "question": "How does grouped-query attention (GQA) improve inference in Llama 2?",
+    "question_type": "factual",
+    "expected_answer_contains": [
+      "grouped-query",
+      "inference",
+      "speed",
+      "memory"
+    ],
+    "relevant_document_ids": [
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q011",
+    "question": "What is the primary evaluation metric used in the educational pedagogy paper?",
+    "question_type": "factual",
+    "expected_answer_contains": [
+      "students",
+      "learning",
+      "assessment"
+    ],
+    "relevant_document_ids": [
+      "a9b78223f7f2e3fb"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q012",
+    "question": "How does BERT represent input sequences using WordPiece embeddings?",
+    "question_type": "factual",
+    "expected_answer_contains": [
+      "wordpiece",
+      "embeddings",
+      "token",
+      "cls",
+      "sep"
+    ],
+    "relevant_document_ids": [
+      "5692a5514787a8c6"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q013",
+    "question": "What is the 'Colossal Clean Crawled Corpus' (C4) dataset used in T5?",
+    "question_type": "factual",
+    "expected_answer_contains": [
+      "c4",
+      "corpus",
+      "web",
+      "clean"
+    ],
+    "relevant_document_ids": [
+      "ad07e47cedf437a4"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q014",
+    "question": "How does the REALM model update its knowledge retriever during fine-tuning?",
+    "question_type": "factual",
+    "expected_answer_contains": [
+      "fine-tuning",
+      "retriever",
+      "update",
+      "gradients"
+    ],
+    "relevant_document_ids": [
+      "0ec1a7ab3de5514c"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q015",
+    "question": "What are the main components of the RAG generator model?",
+    "question_type": "factual",
+    "expected_answer_contains": [
+      "generator",
+      "bart",
+      "seq2seq"
+    ],
+    "relevant_document_ids": [
+      "23e3249e9a1e7541"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q016",
+    "question": "How are positive and negative passages selected for training DPR?",
+    "question_type": "factual",
+    "expected_answer_contains": [
+      "positive",
+      "negative",
+      "bm25",
+      "gold"
+    ],
+    "relevant_document_ids": [
+      "3e67fc1a9977715a"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q017",
+    "question": "What is the impact of few-shot learning demonstrated by GPT-3?",
+    "question_type": "factual",
+    "expected_answer_contains": [
+      "few-shot",
+      "in-context",
+      "zero-shot",
+      "learning"
+    ],
+    "relevant_document_ids": [
+      "97fd272f1fdfc186"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q018",
+    "question": "Describe the self-attention formula used in the original Transformer.",
+    "question_type": "factual",
+    "expected_answer_contains": [
+      "query",
+      "key",
+      "value",
+      "softmax",
+      "sqrt"
+    ],
+    "relevant_document_ids": [
+      "bdfaa68d8984f0dc"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q019",
+    "question": "What is the vocabulary size used in the Mistral 7B tokenizer?",
+    "question_type": "factual",
+    "expected_answer_contains": [
+      "vocabulary",
+      "token",
+      "bpe"
+    ],
+    "relevant_document_ids": [
+      "653b29619eae2ae4"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q020",
+    "question": "What are the safety reward models used in the Llama 2 RLHF pipeline?",
+    "question_type": "factual",
+    "expected_answer_contains": [
+      "safety",
+      "reward model",
+      "helpful",
+      "rlhf"
+    ],
+    "relevant_document_ids": [
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q021",
+    "question": "Compare the architectures of the Transformer model and BERT.",
+    "question_type": "architecture_comparison",
+    "expected_answer_contains": [
+      "encoder",
+      "decoder",
+      "bidirectional",
+      "attention"
+    ],
+    "relevant_document_ids": [
+      "bdfaa68d8984f0dc",
+      "5692a5514787a8c6"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q022",
+    "question": "How do the pre-training objectives of BERT and T5 differ?",
+    "question_type": "methodology_comparison",
+    "expected_answer_contains": [
+      "masked",
+      "text-to-text",
+      "span",
+      "objective"
+    ],
+    "relevant_document_ids": [
+      "5692a5514787a8c6",
+      "ad07e47cedf437a4"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q023",
+    "question": "Compare the retrieval mechanisms in REALM, RAG, and DPR.",
+    "question_type": "methodology_comparison",
+    "expected_answer_contains": [
+      "retrieval",
+      "dense",
+      "generator",
+      "pre-training"
+    ],
+    "relevant_document_ids": [
+      "0ec1a7ab3de5514c",
+      "23e3249e9a1e7541",
+      "3e67fc1a9977715a"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q024",
+    "question": "How does the architecture of GPT-3 differ from BERT?",
+    "question_type": "architecture_comparison",
+    "expected_answer_contains": [
+      "autoregressive",
+      "bidirectional",
+      "decoder",
+      "encoder"
+    ],
+    "relevant_document_ids": [
+      "97fd272f1fdfc186",
+      "5692a5514787a8c6"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q025",
+    "question": "Compare the attention mechanisms in Mistral and Llama 2.",
+    "question_type": "architecture_comparison",
+    "expected_answer_contains": [
+      "sliding window",
+      "grouped-query",
+      "attention",
+      "efficiency"
+    ],
+    "relevant_document_ids": [
+      "653b29619eae2ae4",
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q026",
+    "question": "What are the differences between standard multi-head attention and grouped-query attention?",
+    "question_type": "architecture_comparison",
+    "expected_answer_contains": [
+      "multi-head",
+      "grouped-query",
+      "keys",
+      "values"
+    ],
+    "relevant_document_ids": [
+      "bdfaa68d8984f0dc",
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q027",
+    "question": "How do RAG and REALM incorporate external knowledge differently?",
+    "question_type": "methodology_comparison",
+    "expected_answer_contains": [
+      "fine-tuning",
+      "pre-training",
+      "generator",
+      "knowledge"
+    ],
+    "relevant_document_ids": [
+      "23e3249e9a1e7541",
+      "0ec1a7ab3de5514c"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q028",
+    "question": "Compare the dual-encoder architecture of DPR with cross-encoder models.",
+    "question_type": "architecture_comparison",
+    "expected_answer_contains": [
+      "dual-encoder",
+      "cross-encoder",
+      "representation",
+      "scoring"
+    ],
+    "relevant_document_ids": [
+      "3e67fc1a9977715a"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q029",
+    "question": "How do the tokenization strategies differ between GPT-3 and Llama 2?",
+    "question_type": "methodology_comparison",
+    "expected_answer_contains": [
+      "bpe",
+      "tokenizer",
+      "byte",
+      "vocabulary"
+    ],
+    "relevant_document_ids": [
+      "97fd272f1fdfc186",
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q030",
+    "question": "Compare the RLHF pipelines used in Llama 2 and other instruction-tuned models.",
+    "question_type": "methodology_comparison",
+    "expected_answer_contains": [
+      "rlhf",
+      "ppo",
+      "reward",
+      "alignment"
+    ],
+    "relevant_document_ids": [
+      "1df284ce95f78300",
+      "653b29619eae2ae4"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q031",
+    "question": "What are the differences in positional encoding between the original Transformer and later models like Llama 2?",
+    "question_type": "architecture_comparison",
+    "expected_answer_contains": [
+      "sinusoidal",
+      "rotary",
+      "rope",
+      "positional"
+    ],
+    "relevant_document_ids": [
+      "bdfaa68d8984f0dc",
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q032",
+    "question": "How does T5's approach to multitask learning compare to GPT-3's in-context learning?",
+    "question_type": "methodology_comparison",
+    "expected_answer_contains": [
+      "multitask",
+      "text-to-text",
+      "in-context",
+      "few-shot"
+    ],
+    "relevant_document_ids": [
+      "ad07e47cedf437a4",
+      "97fd272f1fdfc186"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q033",
+    "question": "Compare the fine-tuning strategies of BERT and RAG.",
+    "question_type": "methodology_comparison",
+    "expected_answer_contains": [
+      "fine-tuning",
+      "downstream",
+      "generator",
+      "retriever"
+    ],
+    "relevant_document_ids": [
+      "5692a5514787a8c6",
+      "23e3249e9a1e7541"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q034",
+    "question": "How does Mistral's architecture optimize for faster inference compared to standard Transformers?",
+    "question_type": "architecture_comparison",
+    "expected_answer_contains": [
+      "sliding window",
+      "inference",
+      "memory",
+      "cache"
+    ],
+    "relevant_document_ids": [
+      "653b29619eae2ae4",
+      "bdfaa68d8984f0dc"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q035",
+    "question": "What are the differences in how REALM and DPR define their document indexes?",
+    "question_type": "methodology_comparison",
+    "expected_answer_contains": [
+      "index",
+      "wikipedia",
+      "dense",
+      "passages"
+    ],
+    "relevant_document_ids": [
+      "0ec1a7ab3de5514c",
+      "3e67fc1a9977715a"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q036",
+    "question": "Compare the scale of parameters between BERT-Large, T5-11B, and GPT-3.",
+    "question_type": "architecture_comparison",
+    "expected_answer_contains": [
+      "340m",
+      "11b",
+      "175b",
+      "scale"
+    ],
+    "relevant_document_ids": [
+      "5692a5514787a8c6",
+      "ad07e47cedf437a4",
+      "97fd272f1fdfc186"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q037",
+    "question": "How do the safety interventions in Llama 2 differ from those described in earlier language model papers?",
+    "question_type": "methodology_comparison",
+    "expected_answer_contains": [
+      "safety",
+      "red teaming",
+      "rlhf",
+      "bias"
+    ],
+    "relevant_document_ids": [
+      "1df284ce95f78300",
+      "97fd272f1fdfc186",
+      "5692a5514787a8c6"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q038",
+    "question": "Compare the use of activation functions (e.g., ReLU vs SwiGLU) across the Transformer, T5, and Llama 2.",
+    "question_type": "architecture_comparison",
+    "expected_answer_contains": [
+      "relu",
+      "swiglu",
+      "activation",
+      "gated"
+    ],
+    "relevant_document_ids": [
+      "bdfaa68d8984f0dc",
+      "ad07e47cedf437a4",
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q039",
+    "question": "What are the differences in how RAG-Sequence and RAG-Token generate text?",
+    "question_type": "methodology_comparison",
+    "expected_answer_contains": [
+      "sequence",
+      "token",
+      "marginalize",
+      "beam search"
+    ],
+    "relevant_document_ids": [
+      "23e3249e9a1e7541"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q040",
+    "question": "Compare the data filtering techniques used for pre-training corpora in T5 (C4) and Llama 2.",
+    "question_type": "methodology_comparison",
+    "expected_answer_contains": [
+      "filtering",
+      "clean",
+      "quality",
+      "c4"
+    ],
+    "relevant_document_ids": [
+      "ad07e47cedf437a4",
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q041",
+    "question": "How do the sequence length limits compare across BERT, GPT-3, and Mistral?",
+    "question_type": "architecture_comparison",
+    "expected_answer_contains": [
+      "512",
+      "2048",
+      "8192",
+      "context length"
+    ],
+    "relevant_document_ids": [
+      "5692a5514787a8c6",
+      "97fd272f1fdfc186",
+      "653b29619eae2ae4"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q042",
+    "question": "Compare the embedding sizes used in the original Transformer versus GPT-3.",
+    "question_type": "architecture_comparison",
+    "expected_answer_contains": [
+      "512",
+      "12288",
+      "embedding",
+      "dimension"
+    ],
+    "relevant_document_ids": [
+      "bdfaa68d8984f0dc",
+      "97fd272f1fdfc186"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q043",
+    "question": "What datasets were used to train BERT, T5, and GPT-3?",
+    "question_type": "dataset_comparison",
+    "expected_answer_contains": [
+      "wikipedia",
+      "bookcorpus",
+      "c4",
+      "common crawl"
+    ],
+    "relevant_document_ids": [
+      "5692a5514787a8c6",
+      "ad07e47cedf437a4",
+      "97fd272f1fdfc186"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q044",
+    "question": "Compare the pre-training datasets of Llama 2 and Mistral.",
+    "question_type": "dataset_comparison",
+    "expected_answer_contains": [
+      "tokens",
+      "trillion",
+      "public",
+      "data"
+    ],
+    "relevant_document_ids": [
+      "1df284ce95f78300",
+      "653b29619eae2ae4"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q045",
+    "question": "What datasets are commonly used for Open-Domain QA evaluation in REALM, RAG, and DPR?",
+    "question_type": "dataset_comparison",
+    "expected_answer_contains": [
+      "natural questions",
+      "webquestions",
+      "triviaqa",
+      "curatedtrec"
+    ],
+    "relevant_document_ids": [
+      "0ec1a7ab3de5514c",
+      "23e3249e9a1e7541",
+      "3e67fc1a9977715a"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q046",
+    "question": "How many tokens were used to train GPT-3 compared to Llama 2?",
+    "question_type": "dataset_comparison",
+    "expected_answer_contains": [
+      "300 billion",
+      "2 trillion",
+      "tokens",
+      "scale"
+    ],
+    "relevant_document_ids": [
+      "97fd272f1fdfc186",
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q047",
+    "question": "What machine translation datasets were used to evaluate the original Transformer and T5?",
+    "question_type": "dataset_comparison",
+    "expected_answer_contains": [
+      "wmt",
+      "english-german",
+      "english-french",
+      "translation"
+    ],
+    "relevant_document_ids": [
+      "bdfaa68d8984f0dc",
+      "ad07e47cedf437a4"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q048",
+    "question": "Compare the knowledge sources (e.g., Wikipedia dumps) used in REALM and RAG.",
+    "question_type": "dataset_comparison",
+    "expected_answer_contains": [
+      "wikipedia",
+      "dump",
+      "passages",
+      "knowledge"
+    ],
+    "relevant_document_ids": [
+      "0ec1a7ab3de5514c",
+      "23e3249e9a1e7541"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q049",
+    "question": "What fine-tuning datasets were used for alignment in Llama 2?",
+    "question_type": "dataset_comparison",
+    "expected_answer_contains": [
+      "hh-rlhf",
+      "helpfulness",
+      "safety",
+      "prompts"
+    ],
+    "relevant_document_ids": [
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q050",
+    "question": "How do the training durations and hardware setups compare for GPT-3 and Llama 2?",
+    "question_type": "training_comparison",
+    "expected_answer_contains": [
+      "v100",
+      "a100",
+      "gpu",
+      "compute",
+      "days"
+    ],
+    "relevant_document_ids": [
+      "97fd272f1fdfc186",
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q051",
+    "question": "What datasets were used to evaluate code generation capabilities in Llama 2 and Mistral?",
+    "question_type": "dataset_comparison",
+    "expected_answer_contains": [
+      "humaneval",
+      "mbpp",
+      "code",
+      "benchmark"
+    ],
+    "relevant_document_ids": [
+      "1df284ce95f78300",
+      "653b29619eae2ae4"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q052",
+    "question": "Compare the use of GLUE and SuperGLUE benchmarks in evaluating BERT and T5.",
+    "question_type": "dataset_comparison",
+    "expected_answer_contains": [
+      "glue",
+      "superglue",
+      "benchmark",
+      "tasks"
+    ],
+    "relevant_document_ids": [
+      "5692a5514787a8c6",
+      "ad07e47cedf437a4"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q053",
+    "question": "What conversational datasets were used to train the Chat versions of Llama 2 and Mistral?",
+    "question_type": "dataset_comparison",
+    "expected_answer_contains": [
+      "chat",
+      "instruction",
+      "dialogue",
+      "turns"
+    ],
+    "relevant_document_ids": [
+      "1df284ce95f78300",
+      "653b29619eae2ae4"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q054",
+    "question": "How was the C4 dataset created for T5?",
+    "question_type": "dataset_comparison",
+    "expected_answer_contains": [
+      "common crawl",
+      "filtering",
+      "heuristics",
+      "deduplication"
+    ],
+    "relevant_document_ids": [
+      "ad07e47cedf437a4"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q055",
+    "question": "What negative sampling strategies were used to create training data for DPR?",
+    "question_type": "dataset_comparison",
+    "expected_answer_contains": [
+      "bm25",
+      "hard negatives",
+      "gold",
+      "passages"
+    ],
+    "relevant_document_ids": [
+      "3e67fc1a9977715a"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q056",
+    "question": "Compare the reasoning benchmarks (e.g., GSM8K) used to evaluate GPT-3, Llama 2, and Mistral.",
+    "question_type": "dataset_comparison",
+    "expected_answer_contains": [
+      "gsm8k",
+      "math",
+      "reasoning",
+      "benchmark"
+    ],
+    "relevant_document_ids": [
+      "97fd272f1fdfc186",
+      "1df284ce95f78300",
+      "653b29619eae2ae4"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q057",
+    "question": "What reading comprehension datasets (e.g., SQuAD) were used across BERT and T5?",
+    "question_type": "dataset_comparison",
+    "expected_answer_contains": [
+      "squad",
+      "reading comprehension",
+      "qa",
+      "f1"
+    ],
+    "relevant_document_ids": [
+      "5692a5514787a8c6",
+      "ad07e47cedf437a4"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q058",
+    "question": "How did the authors of Llama 2 filter out sensitive or PII data from their training corpus?",
+    "question_type": "dataset_comparison",
+    "expected_answer_contains": [
+      "pii",
+      "sensitive",
+      "filtering",
+      "scrubbing"
+    ],
+    "relevant_document_ids": [
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q059",
+    "question": "What datasets were used to evaluate the educational pedagogy paper?",
+    "question_type": "dataset_comparison",
+    "expected_answer_contains": [
+      "students",
+      "survey",
+      "classroom",
+      "data"
+    ],
+    "relevant_document_ids": [
+      "a9b78223f7f2e3fb"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q060",
+    "question": "Compare the sizes of the pre-training corpora for BERT (Books+Wiki) vs T5 (C4).",
+    "question_type": "dataset_comparison",
+    "expected_answer_contains": [
+      "16gb",
+      "750gb",
+      "size",
+      "corpus"
+    ],
+    "relevant_document_ids": [
+      "5692a5514787a8c6",
+      "ad07e47cedf437a4"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q061",
+    "question": "How do the reported BLEU scores of the Transformer compare to earlier models?",
+    "question_type": "results_comparison",
+    "expected_answer_contains": [
+      "bleu",
+      "state-of-the-art",
+      "translation",
+      "score"
+    ],
+    "relevant_document_ids": [
+      "bdfaa68d8984f0dc"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q062",
+    "question": "Compare the GLUE score improvements achieved by BERT and T5.",
+    "question_type": "results_comparison",
+    "expected_answer_contains": [
+      "glue",
+      "score",
+      "state-of-the-art",
+      "average"
+    ],
+    "relevant_document_ids": [
+      "5692a5514787a8c6",
+      "ad07e47cedf437a4"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q063",
+    "question": "What were the Exact Match (EM) scores for Open-Domain QA models REALM, RAG, and DPR on Natural Questions?",
+    "question_type": "results_comparison",
+    "expected_answer_contains": [
+      "exact match",
+      "em",
+      "natural questions",
+      "score"
+    ],
+    "relevant_document_ids": [
+      "0ec1a7ab3de5514c",
+      "23e3249e9a1e7541",
+      "3e67fc1a9977715a"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q064",
+    "question": "How did GPT-3 perform on zero-shot vs few-shot tasks?",
+    "question_type": "results_comparison",
+    "expected_answer_contains": [
+      "zero-shot",
+      "few-shot",
+      "accuracy",
+      "prompt"
+    ],
+    "relevant_document_ids": [
+      "97fd272f1fdfc186"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q065",
+    "question": "Compare the performance of Mistral 7B and Llama 2 13B on standard benchmarks.",
+    "question_type": "results_comparison",
+    "expected_answer_contains": [
+      "mistral 7b",
+      "llama 2 13b",
+      "outperforms",
+      "benchmark"
+    ],
+    "relevant_document_ids": [
+      "653b29619eae2ae4",
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q066",
+    "question": "What was the impact of scaling parameters from BERT-Base to BERT-Large?",
+    "question_type": "results_comparison",
+    "expected_answer_contains": [
+      "accuracy",
+      "improvement",
+      "large",
+      "base"
+    ],
+    "relevant_document_ids": [
+      "5692a5514787a8c6"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q067",
+    "question": "How did T5-11B perform on the SuperGLUE benchmark compared to human baselines?",
+    "question_type": "results_comparison",
+    "expected_answer_contains": [
+      "superglue",
+      "human",
+      "baseline",
+      "outperform"
+    ],
+    "relevant_document_ids": [
+      "ad07e47cedf437a4"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q068",
+    "question": "Compare the generation quality (e.g., factuality, specificity) of RAG vs standard seq2seq models.",
+    "question_type": "results_comparison",
+    "expected_answer_contains": [
+      "factuality",
+      "hallucination",
+      "specific",
+      "generation"
+    ],
+    "relevant_document_ids": [
+      "23e3249e9a1e7541"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q069",
+    "question": "What were the top-20 and top-100 retrieval accuracies reported for DPR compared to BM25?",
+    "question_type": "results_comparison",
+    "expected_answer_contains": [
+      "top-20",
+      "top-100",
+      "accuracy",
+      "bm25",
+      "outperform"
+    ],
+    "relevant_document_ids": [
+      "3e67fc1a9977715a"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q070",
+    "question": "How did Llama 2 Chat perform in human evaluations against open-source and closed-source models?",
+    "question_type": "results_comparison",
+    "expected_answer_contains": [
+      "human evaluation",
+      "win rate",
+      "elo",
+      "chatgpt"
+    ],
+    "relevant_document_ids": [
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q071",
+    "question": "What results were reported for GPT-3 on the TriviaQA dataset?",
+    "question_type": "results_comparison",
+    "expected_answer_contains": [
+      "triviaqa",
+      "accuracy",
+      "few-shot",
+      "zero-shot"
+    ],
+    "relevant_document_ids": [
+      "97fd272f1fdfc186"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q072",
+    "question": "Compare the inference latency or throughput improvements reported for Mistral due to its architectural changes.",
+    "question_type": "results_comparison",
+    "expected_answer_contains": [
+      "throughput",
+      "latency",
+      "speed",
+      "inference"
+    ],
+    "relevant_document_ids": [
+      "653b29619eae2ae4"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q073",
+    "question": "What safety evaluation metrics (e.g., violation rates) were reported for Llama 2?",
+    "question_type": "results_comparison",
+    "expected_answer_contains": [
+      "violation",
+      "safety",
+      "toxicity",
+      "bias"
+    ],
+    "relevant_document_ids": [
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q074",
+    "question": "How did the pedagogical interventions affect student outcomes in the educational paper?",
+    "question_type": "results_comparison",
+    "expected_answer_contains": [
+      "improvement",
+      "significant",
+      "p-value",
+      "score"
+    ],
+    "relevant_document_ids": [
+      "a9b78223f7f2e3fb"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q075",
+    "question": "Compare the perplexity scores achieved by different language models as parameter counts increased.",
+    "question_type": "results_comparison",
+    "expected_answer_contains": [
+      "perplexity",
+      "decrease",
+      "scale",
+      "loss"
+    ],
+    "relevant_document_ids": [
+      "97fd272f1fdfc186",
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q076",
+    "question": "What was the impact of using masked language modeling versus standard left-to-right modeling in BERT?",
+    "question_type": "results_comparison",
+    "expected_answer_contains": [
+      "bidirectional",
+      "improvement",
+      "ablation",
+      "context"
+    ],
+    "relevant_document_ids": [
+      "5692a5514787a8c6"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q077",
+    "question": "Summarize the evolution of language model architectures from the original Transformer to Llama 2.",
+    "question_type": "synthesis",
+    "expected_answer_contains": [
+      "encoder",
+      "decoder-only",
+      "scale",
+      "attention"
+    ],
+    "relevant_document_ids": [
+      "bdfaa68d8984f0dc",
+      "5692a5514787a8c6",
+      "97fd272f1fdfc186",
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q078",
+    "question": "How has the scale of training data and parameters changed from BERT (2018) to Llama 2 (2023)?",
+    "question_type": "synthesis",
+    "expected_answer_contains": [
+      "millions",
+      "billions",
+      "trillions",
+      "scale",
+      "compute"
+    ],
+    "relevant_document_ids": [
+      "5692a5514787a8c6",
+      "ad07e47cedf437a4",
+      "97fd272f1fdfc186",
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q079",
+    "question": "Synthesize the different approaches to Open-Domain QA proposed in REALM, RAG, and DPR.",
+    "question_type": "synthesis",
+    "expected_answer_contains": [
+      "pre-training",
+      "generation",
+      "retrieval",
+      "dense"
+    ],
+    "relevant_document_ids": [
+      "0ec1a7ab3de5514c",
+      "23e3249e9a1e7541",
+      "3e67fc1a9977715a"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q080",
+    "question": "What are the key themes in improving attention mechanism efficiency across the Transformer, Mistral, and Llama 2?",
+    "question_type": "synthesis",
+    "expected_answer_contains": [
+      "efficiency",
+      "sliding window",
+      "grouped-query",
+      "memory"
+    ],
+    "relevant_document_ids": [
+      "bdfaa68d8984f0dc",
+      "653b29619eae2ae4",
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q081",
+    "question": "How did the NLP community shift from fine-tuning (BERT/T5) to in-context learning (GPT-3)?",
+    "question_type": "synthesis",
+    "expected_answer_contains": [
+      "fine-tuning",
+      "in-context",
+      "few-shot",
+      "prompt"
+    ],
+    "relevant_document_ids": [
+      "5692a5514787a8c6",
+      "ad07e47cedf437a4",
+      "97fd272f1fdfc186"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q082",
+    "question": "Summarize the strategies for aligning large language models with human preferences.",
+    "question_type": "synthesis",
+    "expected_answer_contains": [
+      "rlhf",
+      "alignment",
+      "safety",
+      "reward"
+    ],
+    "relevant_document_ids": [
+      "97fd272f1fdfc186",
+      "1df284ce95f78300",
+      "653b29619eae2ae4"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q083",
+    "question": "What role does external knowledge retrieval play in modern language models based on REALM and RAG?",
+    "question_type": "synthesis",
+    "expected_answer_contains": [
+      "hallucination",
+      "knowledge",
+      "update",
+      "retrieval-augmented"
+    ],
+    "relevant_document_ids": [
+      "0ec1a7ab3de5514c",
+      "23e3249e9a1e7541"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q084",
+    "question": "How have tokenization methods evolved across these language models?",
+    "question_type": "synthesis",
+    "expected_answer_contains": [
+      "wordpiece",
+      "sentencepiece",
+      "bpe",
+      "byte"
+    ],
+    "relevant_document_ids": [
+      "5692a5514787a8c6",
+      "ad07e47cedf437a4",
+      "97fd272f1fdfc186",
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q085",
+    "question": "Synthesize the findings on how model scaling affects zero-shot and few-shot capabilities.",
+    "question_type": "synthesis",
+    "expected_answer_contains": [
+      "scale",
+      "emergent",
+      "few-shot",
+      "performance"
+    ],
+    "relevant_document_ids": [
+      "97fd272f1fdfc186",
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q086",
+    "question": "What are the common hardware challenges and compute requirements discussed across large model papers?",
+    "question_type": "synthesis",
+    "expected_answer_contains": [
+      "gpu",
+      "tpu",
+      "memory",
+      "parallelism",
+      "cost"
+    ],
+    "relevant_document_ids": [
+      "97fd272f1fdfc186",
+      "1df284ce95f78300",
+      "ad07e47cedf437a4"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q087",
+    "question": "How do these papers approach the problem of context length limitations in Transformers?",
+    "question_type": "synthesis",
+    "expected_answer_contains": [
+      "context length",
+      "extrapolation",
+      "memory",
+      "attention"
+    ],
+    "relevant_document_ids": [
+      "bdfaa68d8984f0dc",
+      "5692a5514787a8c6",
+      "97fd272f1fdfc186",
+      "653b29619eae2ae4",
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q088",
+    "question": "Summarize the shift toward open-source model releases seen in Llama 2 and Mistral compared to GPT-3.",
+    "question_type": "synthesis",
+    "expected_answer_contains": [
+      "open-source",
+      "weights",
+      "community",
+      "closed"
+    ],
+    "relevant_document_ids": [
+      "97fd272f1fdfc186",
+      "1df284ce95f78300",
+      "653b29619eae2ae4"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q089",
+    "question": "What common benchmarks are used to track the progress of NLP models across these papers?",
+    "question_type": "synthesis",
+    "expected_answer_contains": [
+      "glue",
+      "superglue",
+      "squad",
+      "mmlu"
+    ],
+    "relevant_document_ids": [
+      "5692a5514787a8c6",
+      "ad07e47cedf437a4",
+      "97fd272f1fdfc186",
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q090",
+    "question": "How do generative approaches (T5, GPT-3) differ in solving classification tasks compared to encoder-only approaches (BERT)?",
+    "question_type": "synthesis",
+    "expected_answer_contains": [
+      "text-to-text",
+      "classification",
+      "generation",
+      "prompt"
+    ],
+    "relevant_document_ids": [
+      "5692a5514787a8c6",
+      "ad07e47cedf437a4",
+      "97fd272f1fdfc186"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q091",
+    "question": "Synthesize the various methods used to reduce toxicity and bias in language models.",
+    "question_type": "synthesis",
+    "expected_answer_contains": [
+      "toxicity",
+      "bias",
+      "filtering",
+      "alignment",
+      "rlhf"
+    ],
+    "relevant_document_ids": [
+      "97fd272f1fdfc186",
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q092",
+    "question": "What limitations of standard dense retrieval are highlighted in the RAG and REALM papers?",
+    "question_type": "limitations_comparison",
+    "expected_answer_contains": [
+      "static",
+      "index",
+      "update",
+      "knowledge"
+    ],
+    "relevant_document_ids": [
+      "23e3249e9a1e7541",
+      "0ec1a7ab3de5514c"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q093",
+    "question": "What does the GPT-3 paper state about its limitations regarding common sense and logical reasoning?",
+    "question_type": "limitations_comparison",
+    "expected_answer_contains": [
+      "common sense",
+      "logic",
+      "physics",
+      "reasoning"
+    ],
+    "relevant_document_ids": [
+      "97fd272f1fdfc186"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q094",
+    "question": "Describe the limitations of the original Transformer architecture regarding long sequences.",
+    "question_type": "limitations_comparison",
+    "expected_answer_contains": [
+      "quadratic",
+      "complexity",
+      "memory",
+      "long"
+    ],
+    "relevant_document_ids": [
+      "bdfaa68d8984f0dc"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q095",
+    "question": "What limitations of BERT did T5 attempt to address?",
+    "question_type": "limitations_comparison",
+    "expected_answer_contains": [
+      "generative",
+      "tasks",
+      "unified",
+      "text-to-text"
+    ],
+    "relevant_document_ids": [
+      "5692a5514787a8c6",
+      "ad07e47cedf437a4"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q096",
+    "question": "What research gaps in model safety and alignment are discussed in the Llama 2 paper?",
+    "question_type": "limitations_comparison",
+    "expected_answer_contains": [
+      "safety",
+      "jailbreak",
+      "adversarial",
+      "bias"
+    ],
+    "relevant_document_ids": [
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q097",
+    "question": "How do the authors of DPR characterize the limitations of BM25?",
+    "question_type": "limitations_comparison",
+    "expected_answer_contains": [
+      "lexical",
+      "synonym",
+      "vocabulary",
+      "sparse"
+    ],
+    "relevant_document_ids": [
+      "3e67fc1a9977715a"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q098",
+    "question": "What does the GPT-3 paper say about the environmental impact and compute cost of large models?",
+    "question_type": "limitations_comparison",
+    "expected_answer_contains": [
+      "carbon",
+      "energy",
+      "compute",
+      "cost"
+    ],
+    "relevant_document_ids": [
+      "97fd272f1fdfc186"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q099",
+    "question": "What limitations are associated with the RAG generator's inability to see the full context at once?",
+    "question_type": "limitations_comparison",
+    "expected_answer_contains": [
+      "marginalize",
+      "fusion",
+      "context",
+      "sequence"
+    ],
+    "relevant_document_ids": [
+      "23e3249e9a1e7541"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q100",
+    "question": "What research gaps remain in open-source models compared to closed-source models according to Llama 2 and Mistral?",
+    "question_type": "limitations_comparison",
+    "expected_answer_contains": [
+      "gap",
+      "closed-source",
+      "proprietary",
+      "performance"
+    ],
+    "relevant_document_ids": [
+      "1df284ce95f78300",
+      "653b29619eae2ae4"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q101",
+    "question": "What limitations of the educational study are mentioned in the pedagogy paper?",
+    "question_type": "limitations_comparison",
+    "expected_answer_contains": [
+      "sample size",
+      "generalizability",
+      "control"
+    ],
+    "relevant_document_ids": [
+      "a9b78223f7f2e3fb"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q102",
+    "question": "What are the limitations of fine-tuning discussed in the GPT-3 paper when introducing in-context learning?",
+    "question_type": "limitations_comparison",
+    "expected_answer_contains": [
+      "overfitting",
+      "spurious",
+      "dataset",
+      "task-specific"
+    ],
+    "relevant_document_ids": [
+      "97fd272f1fdfc186"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q103",
+    "question": "How do Mistral and Llama 2 address the memory bandwidth limitations during inference?",
+    "question_type": "limitations_comparison",
+    "expected_answer_contains": [
+      "memory bandwidth",
+      "grouped-query",
+      "kv cache",
+      "sliding window"
+    ],
+    "relevant_document_ids": [
+      "653b29619eae2ae4",
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q104",
+    "question": "How does the T5 paper's view on the necessity of unsupervised pre-training contrast with other approaches?",
+    "question_type": "contradiction",
+    "expected_answer_contains": [
+      "necessity",
+      "unsupervised",
+      "supervised",
+      "transfer"
+    ],
+    "relevant_document_ids": [
+      "ad07e47cedf437a4",
+      "5692a5514787a8c6"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q105",
+    "question": "Does DPR suggest that BM25 should be completely replaced, or do they still find it useful?",
+    "question_type": "contradiction",
+    "expected_answer_contains": [
+      "hybrid",
+      "combine",
+      "outperform",
+      "lexical"
+    ],
+    "relevant_document_ids": [
+      "3e67fc1a9977715a"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": false
+  },
+  {
+    "id": "q106",
+    "question": "How does GPT-3's approach to task-specific fine-tuning contradict the paradigm established by BERT?",
+    "question_type": "contradiction",
+    "expected_answer_contains": [
+      "fine-tuning",
+      "few-shot",
+      "gradient",
+      "in-context"
+    ],
+    "relevant_document_ids": [
+      "97fd272f1fdfc186",
+      "5692a5514787a8c6"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q107",
+    "question": "Do Llama 2 and Mistral agree on the best attention mechanism for efficient inference?",
+    "question_type": "contradiction",
+    "expected_answer_contains": [
+      "grouped-query",
+      "sliding window",
+      "attention",
+      "efficiency"
+    ],
+    "relevant_document_ids": [
+      "1df284ce95f78300",
+      "653b29619eae2ae4"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q108",
+    "question": "How do RAG and REALM differ on whether the retriever should be updated during downstream fine-tuning?",
+    "question_type": "contradiction",
+    "expected_answer_contains": [
+      "update",
+      "frozen",
+      "retriever",
+      "gradients"
+    ],
+    "relevant_document_ids": [
+      "23e3249e9a1e7541",
+      "0ec1a7ab3de5514c"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q109",
+    "question": "Trace the evolution of the self-attention mechanism from the 2017 Transformer to 2023's Mistral.",
+    "question_type": "evolution",
+    "expected_answer_contains": [
+      "multi-head",
+      "sliding window",
+      "efficiency",
+      "context"
+    ],
+    "relevant_document_ids": [
+      "bdfaa68d8984f0dc",
+      "653b29619eae2ae4"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q110",
+    "question": "How has the scale of 'large' language models evolved from 2018 (BERT) to 2020 (GPT-3)?",
+    "question_type": "evolution",
+    "expected_answer_contains": [
+      "340 million",
+      "175 billion",
+      "scale",
+      "magnitude"
+    ],
+    "relevant_document_ids": [
+      "5692a5514787a8c6",
+      "97fd272f1fdfc186"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q111",
+    "question": "Describe the evolution of retrieval-augmented generation from REALM to RAG.",
+    "question_type": "evolution",
+    "expected_answer_contains": [
+      "pre-training",
+      "generation",
+      "seq2seq",
+      "bart"
+    ],
+    "relevant_document_ids": [
+      "0ec1a7ab3de5514c",
+      "23e3249e9a1e7541"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q112",
+    "question": "How have evaluation benchmarks evolved from GLUE (used in BERT) to MMLU (used in Llama 2)?",
+    "question_type": "evolution",
+    "expected_answer_contains": [
+      "glue",
+      "mmlu",
+      "saturation",
+      "difficulty"
+    ],
+    "relevant_document_ids": [
+      "5692a5514787a8c6",
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
+  },
+  {
+    "id": "q113",
+    "question": "Trace the history of Open-Source LLMs from T5 to Llama 2.",
+    "question_type": "evolution",
+    "expected_answer_contains": [
+      "open-source",
+      "weights",
+      "t5",
+      "llama 2",
+      "commercial"
+    ],
+    "relevant_document_ids": [
+      "ad07e47cedf437a4",
+      "1df284ce95f78300"
+    ],
+    "relevant_chunk_ids": [],
+    "comparison_required": true
   }
 ]

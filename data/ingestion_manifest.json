@@ -1,0 +1,68 @@
+[
+  {
+    "file": "1810.04805v2.pdf",
+    "status": "ok",
+    "document_id": "5692a5514787a8c6",
+    "chunks_added": 83
+  },
+  {
+    "file": "1910.10683v4.pdf",
+    "status": "ok",
+    "document_id": "ad07e47cedf437a4",
+    "chunks_added": 259
+  },
+  {
+    "file": "2002.08909v1.pdf",
+    "status": "ok",
+    "document_id": "0ec1a7ab3de5514c",
+    "chunks_added": 62
+  },
+  {
+    "file": "2004.04906v3.pdf",
+    "status": "ok",
+    "document_id": "3e67fc1a9977715a",
+    "chunks_added": 71
+  },
+  {
+    "file": "2005.11401v4.pdf",
+    "status": "ok",
+    "document_id": "23e3249e9a1e7541",
+    "chunks_added": 86
+  },
+  {
+    "file": "2005.14165v4.pdf",
+    "status": "ok",
+    "document_id": "97fd272f1fdfc186",
+    "chunks_added": 305
+  },
+  {
+    "file": "2007.01282v2.pdf",
+    "status": "ok",
+    "document_id": "f1ee7e927c3fb31b",
+    "chunks_added": 30
+  },
+  {
+    "file": "2307.03172v3.pdf",
+    "status": "ok",
+    "document_id": "653b29619eae2ae4",
+    "chunks_added": 80
+  },
+  {
+    "file": "2307.09288v2.pdf",
+    "status": "ok",
+    "document_id": "1df284ce95f78300",
+    "chunks_added": 327
+  },
+  {
+    "file": "attention.pdf",
+    "status": "ok",
+    "document_id": "bdfaa68d8984f0dc",
+    "chunks_added": 49
+  },
+  {
+    "file": "EJ1172284.pdf",
+    "status": "ok",
+    "document_id": "a9b78223f7f2e3fb",
+    "chunks_added": 64
+  }
+]

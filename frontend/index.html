@@ -2,105 +2,340 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>VerityRAG</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VerityRAG Workspace</title>
 <style>
-  body { font-family: -apple-system, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; color: #222; }
-  h1 { font-size: 22px; font-weight: 500; }
-  .row { display: flex; gap: 24px; margin-top: 24px; }
-  .col { flex: 1; }
-  textarea, input[type=file] { width: 100%; padding: 8px; box-sizing: border-box; }
-  button { padding: 8px 16px; margin-top: 8px; cursor: pointer; }
-  .card { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-top: 12px; }
-  .claim { border-left: 3px solid #ccc; padding-left: 10px; margin-bottom: 8px; }
+  body { font-family: -apple-system, sans-serif; margin: 0; padding: 0; color: #222; background: #f9f9f9; display: flex; height: 100vh; }
+  
+  /* Sidebar */
+  .sidebar { width: 300px; background: #fff; border-right: 1px solid #ddd; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
+  .sidebar h2 { font-size: 16px; margin: 0 0 10px 0; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.5px; }
+  
+  .upload-box { border: 2px dashed #ccc; padding: 15px; text-align: center; border-radius: 6px; background: #fafafa; cursor: pointer; transition: 0.2s; }
+  .upload-box:hover { border-color: #999; }
+  .upload-box input { display: none; }
+  
+  .list-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: #f4f4f4; border-radius: 4px; margin-bottom: 8px; font-size: 14px; }
+  .list-item:hover { background: #eee; }
+  .list-item .doc-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
+  .list-item .delete-btn { color: #d14b4b; cursor: pointer; border: none; background: none; font-size: 16px; padding: 0 5px; }
+  
+  .collection-item { cursor: pointer; padding: 8px; border-radius: 4px; border: 1px solid transparent; }
+  .collection-item.active { background: #e0f0ff; border-color: #b3d4ff; font-weight: 500; }
+  
+  /* Main Content */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .header { padding: 20px 30px; background: #fff; border-bottom: 1px solid #ddd; display: flex; align-items: center; gap: 15px; }
+  .header input[type="text"] { flex: 1; padding: 12px 16px; font-size: 16px; border: 1px solid #ccc; border-radius: 8px; outline: none; }
+  .header button { padding: 12px 24px; font-size: 16px; background: #222; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; }
+  .header button:hover { background: #444; }
+  
+  .content { flex: 1; overflow-y: auto; padding: 30px; display: flex; gap: 30px; }
+  
+  /* Answer Panel */
+  .answer-panel { flex: 2; display: flex; flex-direction: column; gap: 20px; }
+  .card { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .card h3 { margin-top: 0; font-size: 18px; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }
+  
+  .answer-text { line-height: 1.6; white-space: pre-wrap; font-size: 15px; }
+  
+  /* Verification Panel */
+  .meta-panel { flex: 1; display: flex; flex-direction: column; gap: 20px; }
+  .claim { border-left: 3px solid #ccc; padding-left: 12px; margin-bottom: 12px; font-size: 14px; background: #fafafa; padding: 10px 10px 10px 12px; border-radius: 0 4px 4px 0; }
   .supported { border-color: #3b9c5a; }
-  .contradicted { border-color: #d14b4b; }
-  .not_found { border-color: #d19b3b; }
-  .score { font-weight: 500; }
+  .unsupported { border-color: #d14b4b; }
+  .weakly_supported { border-color: #d19b3b; }
+  .verification_unavailable { border-color: #888; }
+  .claim-status { font-weight: 600; margin-bottom: 4px; font-size: 12px; text-transform: uppercase; }
+  .claim-text { font-weight: 500; margin-bottom: 6px; }
+  .claim-evidence { color: #666; font-size: 13px; font-style: italic; }
+  
   .muted { color: #777; font-size: 13px; }
+  
+  /* Modal */
+  .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 100; }
+  .modal { background: #fff; padding: 25px; border-radius: 8px; width: 400px; }
+  .modal h3 { margin-top: 0; }
+  .modal input, .modal select { width: 100%; padding: 8px; margin-bottom: 15px; box-sizing: border-box; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+  .modal-actions button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; }
+  .btn-primary { background: #222; color: #fff; }
+  .btn-secondary { background: #eee; color: #333; }
 </style>
 </head>
 <body>
-  <h1>VerityRAG</h1>
-  <p class="muted">Upload a paper, ask a question, see the answer verified claim-by-claim.</p>
-
-  <div class="card">
-    <input type="file" id="fileInput" accept=".pdf">
-    <button onclick="uploadFile()">Upload PDF</button>
-    <div id="uploadStatus" class="muted"></div>
-  </div>
-
-  <div class="card">
-    <textarea id="question" rows="2" placeholder="Ask a question about the uploaded papers..."></textarea>
-    <button onclick="askQuestion()">Ask</button>
-  </div>
-
-  <div class="row">
-    <div class="col">
-      <h3>Answer</h3>
-      <div id="answer" class="card"></div>
-      <h3>Sources</h3>
-      <div id="sources"></div>
+  
+  <div class="sidebar">
+    <!-- Documents -->
+    <div>
+      <h2>Documents</h2>
+      <label class="upload-box">
+        <input type="file" id="fileInput" accept=".pdf" multiple onchange="handleUpload(event)">
+        <span id="uploadText">Click to upload PDFs</span>
+      </label>
+      <div id="documentList" style="margin-top: 15px;"></div>
     </div>
-    <div class="col">
-      <h3>Verification</h3>
-      <div id="verification"></div>
+    
+    <!-- Collections -->
+    <div>
+      <h2>Collections</h2>
+      <button onclick="openCollectionModal()" style="width: 100%; padding: 8px; margin-bottom: 10px; cursor: pointer; border: 1px solid #ccc; background: #fff; border-radius: 4px;">+ New Collection</button>
+      
+      <div class="collection-item active" onclick="selectCollection(null, this)" id="col-all">
+        All Documents
+      </div>
+      <div id="collectionList"></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="header">
+      <input type="text" id="question" placeholder="Ask a research question (e.g. Compare the training datasets in these papers...)">
+      <button onclick="askQuestion()">Research</button>
+    </div>
+    
+    <div class="content" id="workspaceContent" style="display: none;">
+      <div class="answer-panel">
+        <div class="card">
+          <h3>Synthesis</h3>
+          <div id="answer" class="answer-text"></div>
+        </div>
+        
+        <div class="card" id="sourcesCard">
+          <h3>Retrieved Evidence</h3>
+          <div id="sources"></div>
+        </div>
+      </div>
+      
+      <div class="meta-panel">
+        <div class="card">
+          <h3>Claim Verification</h3>
+          <div id="verificationStats" style="margin-bottom: 15px; font-weight: 500;"></div>
+          <div id="verificationList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Collection Modal -->
+  <div class="modal-overlay" id="colModal">
+    <div class="modal">
+      <h3>Create Collection</h3>
+      <label>Name</label>
+      <input type="text" id="colName" placeholder="e.g. LLM Architectures">
+      <label>Select Documents</label>
+      <select id="colDocs" multiple style="height: 120px;"></select>
+      
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeCollectionModal()">Cancel</button>
+        <button class="btn-primary" onclick="createCollection()">Create</button>
+      </div>
     </div>
   </div>
 
 <script>
 const API_BASE = "http://localhost:8000";
+let activeCollectionId = null;
 
-async function uploadFile() {
-  const input = document.getElementById("fileInput");
-  if (!input.files.length) return;
-  const formData = new FormData();
-  formData.append("file", input.files[0]);
-  document.getElementById("uploadStatus").textContent = "Uploading...";
-  const res = await fetch(`${API_BASE}/upload`, { method: "POST", body: formData });
-  const data = await res.json();
-  document.getElementById("uploadStatus").textContent =
-    `Indexed ${data.chunks_added} chunks from ${data.filename}`;
+// --- Initialization ---
+async function loadState() {
+  await fetchDocuments();
+  await fetchCollections();
+}
+window.onload = loadState;
+
+// --- Documents ---
+async function fetchDocuments() {
+  const res = await fetch(`${API_BASE}/documents`);
+  const docs = await res.json();
+  const list = document.getElementById("documentList");
+  list.innerHTML = "";
+  
+  const select = document.getElementById("colDocs");
+  select.innerHTML = "";
+  
+  docs.forEach(doc => {
+    // Sidebar list
+    const div = document.createElement("div");
+    div.className = "list-item";
+    div.innerHTML = `
+      <div class="doc-title" title="${doc.filename}">${doc.filename} <br><span class="muted">${doc.ingestion_status} (${doc.chunk_count} chunks)</span></div>
+      <button class="delete-btn" onclick="deleteDocument('${doc.document_id}')">×</button>
+    `;
+    list.appendChild(div);
+    
+    // Modal select
+    const opt = document.createElement("option");
+    opt.value = doc.document_id;
+    opt.textContent = doc.filename;
+    select.appendChild(opt);
+  });
 }
 
+async function handleUpload(e) {
+  const files = e.target.files;
+  if (!files.length) return;
+  
+  const textEl = document.getElementById("uploadText");
+  textEl.textContent = `Uploading ${files.length} file(s)...`;
+  
+  for (let i = 0; i < files.length; i++) {
+    const formData = new FormData();
+    formData.append("file", files[i]);
+    try {
+      await fetch(`${API_BASE}/upload`, { method: "POST", body: formData });
+    } catch(err) {
+      console.error(err);
+    }
+  }
+  
+  textEl.textContent = "Click to upload PDFs";
+  e.target.value = "";
+  await fetchDocuments();
+}
+
+async function deleteDocument(id) {
+  if (!confirm("Are you sure you want to delete this document?")) return;
+  await fetch(`${API_BASE}/documents/${id}`, { method: "DELETE" });
+  await fetchDocuments();
+  await fetchCollections(); // Update collections if doc was removed
+}
+
+// --- Collections ---
+async function fetchCollections() {
+  const res = await fetch(`${API_BASE}/collections`);
+  const cols = await res.json();
+  const list = document.getElementById("collectionList");
+  list.innerHTML = "";
+  
+  cols.forEach(col => {
+    const div = document.createElement("div");
+    div.className = "collection-item list-item";
+    div.innerHTML = `
+      <div onclick="selectCollection('${col.collection_id}', this.parentElement)" style="flex:1;">
+        ${col.name} <div class="muted">${col.document_ids.length} docs</div>
+      </div>
+      <button class="delete-btn" onclick="deleteCollection('${col.collection_id}', event)">×</button>
+    `;
+    // highlight active
+    if (activeCollectionId === col.collection_id) {
+      div.classList.add("active");
+    }
+    list.appendChild(div);
+  });
+}
+
+function selectCollection(id, element) {
+  activeCollectionId = id;
+  document.querySelectorAll('.collection-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('col-all').classList.remove('active');
+  if (element) {
+    element.classList.add('active');
+  } else if (!id) {
+    document.getElementById('col-all').classList.add('active');
+  }
+}
+
+function openCollectionModal() {
+  document.getElementById("colModal").style.display = "flex";
+}
+function closeCollectionModal() {
+  document.getElementById("colModal").style.display = "none";
+}
+
+async function createCollection() {
+  const name = document.getElementById("colName").value;
+  const select = document.getElementById("colDocs");
+  const docIds = Array.from(select.selectedOptions).map(opt => opt.value);
+  
+  if (!name || !docIds.length) {
+    alert("Please enter a name and select at least one document.");
+    return;
+  }
+  
+  await fetch(`${API_BASE}/collections`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, document_ids: docIds })
+  });
+  
+  closeCollectionModal();
+  document.getElementById("colName").value = "";
+  await fetchCollections();
+}
+
+async function deleteCollection(id, e) {
+  e.stopPropagation();
+  if (!confirm("Delete this collection? Documents will not be deleted.")) return;
+  await fetch(`${API_BASE}/collections/${id}`, { method: "DELETE" });
+  if (activeCollectionId === id) selectCollection(null);
+  await fetchCollections();
+}
+
+// --- Query ---
 async function askQuestion() {
   const question = document.getElementById("question").value;
   if (!question.trim()) return;
-  document.getElementById("answer").textContent = "Thinking...";
+  
+  document.getElementById("workspaceContent").style.display = "flex";
+  document.getElementById("answer").textContent = "Researching across documents... Please wait.";
   document.getElementById("sources").innerHTML = "";
-  document.getElementById("verification").innerHTML = "";
+  document.getElementById("verificationList").innerHTML = "";
+  document.getElementById("verificationStats").textContent = "";
+  
+  const payload = { question };
+  if (activeCollectionId) {
+    payload.collection_id = activeCollectionId;
+  }
 
-  const res = await fetch(`${API_BASE}/query`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question }),
-  });
-  const data = await res.json();
-
-  document.getElementById("answer").textContent = data.answer;
-
-  const sourcesHtml = (data.sources || []).map(s => `
-    <div class="card">
-      <div class="muted">${s.source} · ${s.retrieval_method} · score ${s.rerank_score}</div>
-      <div>${s.text}</div>
-    </div>
-  `).join("");
-  document.getElementById("sources").innerHTML = sourcesHtml;
-
-  if (data.verification) {
-    const v = data.verification;
-    const claimsHtml = v.claims.map(c => `
-      <div class="claim ${c.label}">
-        <div><strong>${c.label}</strong> (confidence ${c.confidence})</div>
-        <div>${c.claim}</div>
-        ${c.evidence ? `<div class="muted">Evidence: ${c.evidence}</div>` : ""}
+  try {
+    const res = await fetch(`${API_BASE}/query`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    
+    if (!res.ok) throw new Error("Request failed");
+    const data = await res.json();
+    
+    // Render Answer
+    document.getElementById("answer").textContent = data.answer;
+    
+    // Render Sources grouped by doc or just list
+    const sourcesHtml = (data.sources || []).map(s => `
+      <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px dashed #eee;">
+        <div class="muted"><strong>[${s.document_id}, ${s.chunk_id}]</strong> ${s.source} (page ${s.page_number || '?'})</div>
+        <div style="font-size: 14px; margin-top: 5px;">${s.text}</div>
       </div>
     `).join("");
-    document.getElementById("verification").innerHTML = `
-      <div class="card">
-        <div class="score">Groundedness: ${(v.groundedness_score * 100).toFixed(0)}% (${v.num_supported}/${v.num_claims} claims supported)</div>
-      </div>
-      ${claimsHtml}
-    `;
+    document.getElementById("sources").innerHTML = sourcesHtml;
+    
+    // Render Verification
+    if (data.verification && data.verification.length > 0) {
+      let supportedCount = 0;
+      const claimsHtml = data.verification.map(c => {
+        let cls = "unsupported";
+        if (c.status === "SUPPORTED") { cls = "supported"; supportedCount++; }
+        if (c.status === "WEAKLY_SUPPORTED") cls = "weakly_supported";
+        if (c.status === "VERIFICATION_UNAVAILABLE") cls = "verification_unavailable";
+        
+        return `
+          <div class="claim ${cls}">
+            <div class="claim-status" style="color: var(--${cls})">${c.status}</div>
+            <div class="claim-text">${c.claim}</div>
+            <div class="claim-evidence">Evidence: ${c.supporting_evidence || 'N/A'}</div>
+          </div>
+        `;
+      }).join("");
+      
+      document.getElementById("verificationStats").textContent = `${supportedCount} / ${data.verification.length} claims supported`;
+      document.getElementById("verificationList").innerHTML = claimsHtml;
+    } else {
+      document.getElementById("verificationStats").textContent = "No claims verified.";
+    }
+    
+  } catch (err) {
+    document.getElementById("answer").textContent = "Error executing query: " + err.message;
   }
 }
 </script>

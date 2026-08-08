@@ -6,10 +6,15 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from ingest import ingest_document, get_collection
+from ingest import ingest_document, get_collection, delete_document_from_index
 from retrieval import retrieve, hybrid_retrieve, build_bm25_index, get_contributing_documents
 from verify import verify_answer
 from llm import call_llm
+from database import (
+    list_documents, get_document, 
+    list_collections, get_collection as db_get_collection, create_collection,
+    add_document_to_collection, remove_document_from_collection, delete_collection
+)
 
 app = FastAPI(title="VerityRAG API")
 
@@ -34,9 +39,16 @@ SOURCE PASSAGES:
 class QueryRequest(BaseModel):
     question: str
     top_k: int = 5
-    # Optional: restrict retrieval to specific document IDs (multi-paper filter)
+    # Restrict retrieval to specific document IDs
     document_ids: list[str] | None = None
+    # Or restrict to a collection
+    collection_id: str | None = None
     strategy: str = "hybrid"
+
+class CollectionCreateRequest(BaseModel):
+    name: str
+    description: str | None = None
+    document_ids: list[str] = []
 
 
 @app.on_event("startup")
@@ -66,6 +78,55 @@ async def upload_document(file: UploadFile = File(...)):
     finally:
         Path(tmp_path).unlink(missing_ok=True)
 
+# --- Document Endpoints ---
+
+@app.get("/documents")
+def api_list_documents():
+    return list_documents()
+
+@app.get("/documents/{doc_id}")
+def api_get_document(doc_id: str):
+    doc = get_document(doc_id)
+    if not doc:
+        raise HTTPException(404, "Document not found")
+    return doc
+
+@app.delete("/documents/{doc_id}")
+def api_delete_document(doc_id: str):
+    doc = get_document(doc_id)
+    if not doc:
+        raise HTTPException(404, "Document not found")
+    delete_document_from_index(doc_id)
+    build_bm25_index()
+    return {"status": "ok", "deleted": doc_id}
+
+# --- Collection Endpoints ---
+
+@app.get("/collections")
+def api_list_collections():
+    return list_collections()
+
+@app.get("/collections/{collection_id}")
+def api_get_collection(collection_id: str):
+    col = db_get_collection(collection_id)
+    if not col:
+        raise HTTPException(404, "Collection not found")
+    return col
+
+@app.post("/collections")
+def api_create_collection(req: CollectionCreateRequest):
+    import uuid
+    col_id = uuid.uuid4().hex[:12]
+    create_collection(col_id, req.name, req.description)
+    for doc_id in req.document_ids:
+        add_document_to_collection(col_id, doc_id)
+    return db_get_collection(col_id)
+
+@app.delete("/collections/{collection_id}")
+def api_delete_collection(collection_id: str):
+    delete_collection(collection_id)
+    return {"status": "ok"}
+
 
 @app.post("/query")
 def query(request: QueryRequest):
@@ -74,10 +135,16 @@ def query(request: QueryRequest):
     
     start = time.time()
     
+    target_document_ids = request.document_ids
+    if request.collection_id and not target_document_ids:
+        col = db_get_collection(request.collection_id)
+        if col:
+            target_document_ids = col.get("document_ids", [])
+    
     # Initialize LangGraph state
     initial_state = {
         "original_query": request.question,
-        "document_ids": request.document_ids,
+        "document_ids": target_document_ids,
     }
     
     # Run the graph

@@ -267,6 +267,7 @@ def test_api_backward_compatibility():
         question = "attention mechanism"
         top_k = 2
         document_ids = None
+        collection_id = None
         strategy = "hybrid"
         
     res = main.query(MockRequest())
@@ -301,38 +302,41 @@ def test_verifier_fallback():
 # Run all tests
 # ---------------------------------------------------------------------------
 
-tests = [
-    ("TEST 01: Graph construction",       test_graph_construction),
-    ("TEST 02: State init",               test_state_init),
-    ("TEST 03: Planner behavior",         test_planner_behavior),
-    ("TEST 04: Planner decomposition",    test_planner_decomposition),
-    ("TEST 05: Retrieval node",           test_retrieval_node),
-    ("TEST 06: Organizer",                test_organizer),
-    ("TEST 07: Parent context dedupe",    test_parent_context_dedupe),
-    ("TEST 08: Multi-document grouping",  test_multi_document_grouping),
-    ("TEST 09: Structured citations",     test_citation_preservation),
-    ("TEST 10: Synthesis",                test_synthesis),
-    ("TEST 11: Claim verification",       test_claim_verification),
-    ("TEST 12: Retry limit",              test_retry_limit),
-    ("TEST 13: Retry behavior",           test_retry_behavior),
-    ("TEST 14: LLM fallback",             test_llm_fallback_planner),
-    ("TEST 15: Full graph execution",     test_full_graph_execution),
-    ("TEST 16: API Backward compat",      test_api_backward_compatibility),
-    ("TEST 17: Verifier fallback",        test_verifier_fallback),
-]
+if __name__ == "__main__":
+    print("\n=== Phase 3 LangGraph Test Suite ===\n")
 
-for name, fn in tests:
-    run_test(name, fn)
+    tests = [
+        ("TEST 01: Graph construction",       test_graph_construction),
+        ("TEST 02: State init",               test_state_init),
+        ("TEST 03: Planner behavior",         test_planner_behavior),
+        ("TEST 04: Planner decomposition",    test_planner_decomposition),
+        ("TEST 05: Retrieval node",           test_retrieval_node),
+        ("TEST 06: Organizer",                test_organizer),
+        ("TEST 07: Parent context dedupe",    test_parent_context_dedupe),
+        ("TEST 08: Multi-document grouping",  test_multi_document_grouping),
+        ("TEST 09: Structured citations",     test_citation_preservation),
+        ("TEST 10: Synthesis",                test_synthesis),
+        ("TEST 11: Claim verification",       test_claim_verification),
+        ("TEST 12: Retry limit",              test_retry_limit),
+        ("TEST 13: Retry behavior",           test_retry_behavior),
+        ("TEST 14: LLM fallback",             test_llm_fallback_planner),
+        ("TEST 15: Full graph execution",     test_full_graph_execution),
+        ("TEST 16: API Backward compat",      test_api_backward_compatibility),
+        ("TEST 17: Verifier fallback",        test_verifier_fallback),
+    ]
 
-passed = sum(1 for _, ok, _ in _results if ok)
-failed = sum(1 for _, ok, _ in _results if not ok)
-print(f"\n{'='*50}")
-print(f"Results: {passed} passed / {failed} failed / {len(_results)} total")
-if failed:
-    print("\nFailed tests:")
-    for name, ok, msg in _results:
-        if not ok:
-            print(f"  {name}: {msg}")
-    sys.exit(1)
-else:
-    print("\nAll Phase 3 graph tests PASSED.")
+    for name, fn in tests:
+        run_test(name, fn)
+
+    passed = sum(1 for _, ok, _ in _results if ok)
+    failed = sum(1 for _, ok, _ in _results if not ok)
+    print(f"\n{'='*50}")
+    print(f"Results: {passed} passed / {failed} failed / {len(_results)} total")
+    if failed:
+        print("\nFailed tests:")
+        for name, ok, msg in _results:
+            if not ok:
+                print(f"  {name}: {msg}")
+        sys.exit(1)
+    else:
+        print("\nAll Phase 3 graph tests PASSED.")
