@@ -18,3 +18,7 @@ pypdf==5.0.1
 
 # Eval
 pandas==2.2.3
+
+# Phase 3 Orchestration
+langgraph==0.2.14
+langchain-core==0.2.33

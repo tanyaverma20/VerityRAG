@@ -69,12 +69,64 @@ async def upload_document(file: UploadFile = File(...)):
 
 @app.post("/query")
 def query(request: QueryRequest):
-    chunks = retrieve(
-        request.question,
-        strategy=request.strategy,
-        document_ids=request.document_ids,
-        top_k=request.top_k,
-    )
+    import time
+    from graph.workflow import research_app
+    
+    start = time.time()
+    
+    # Initialize LangGraph state
+    initial_state = {
+        "original_query": request.question,
+        "document_ids": request.document_ids,
+    }
+    
+    # Run the graph
+    try:
+        final_state = research_app.invoke(initial_state)
+    except Exception as e:
+        # Fallback to Phase 2 retrieval if graph fails
+        print(f"Graph execution failed: {e}")
+        chunks = retrieve(
+            request.question,
+            strategy=request.strategy,
+            document_ids=request.document_ids,
+            top_k=request.top_k,
+        )
+        if not chunks:
+            return {
+                "answer": "No documents have been ingested yet, or nothing relevant was found.",
+                "sources": [],
+                "verification": None,
+            }
+        sources_text = "\n---\n".join(
+            f"[{i+1}] (source: {c['metadata']['source']}) {c['text']}"
+            for i, c in enumerate(chunks)
+        )
+        generation = call_llm(ANSWER_PROMPT.format(question=request.question, sources=sources_text))
+        verification = verify_answer(generation["text"], chunks)
+        return {
+            "answer": generation["text"],
+            "sources": [
+                {
+                    "source": c["metadata"]["source"],
+                    "document_id": c["metadata"].get("document_id", ""),
+                    "chunk_id": c["metadata"].get("chunk_id", ""),
+                    "parent_id": c["metadata"].get("parent_id", ""),
+                    "page_number": c["metadata"].get("page_number"),
+                    "section": c["metadata"].get("section", ""),
+                    "text": c["text"],
+                    "retrieval_method": c.get("source_method", ""),
+                    "rerank_score": round(c.get("rerank_score", 0), 3),
+                    "rrf_score": round(c.get("rrf_score", 0), 6),
+                }
+                for c in chunks
+            ],
+            "documents_found": get_contributing_documents(chunks),
+            "verification": verification,
+            "latency_seconds": round(time.time() - start, 3),
+        }
+    
+    chunks = final_state.get("retrieval_results", [])
     if not chunks:
         return {
             "answer": "No documents have been ingested yet, or nothing relevant was found.",
@@ -82,15 +134,9 @@ def query(request: QueryRequest):
             "verification": None,
         }
 
-    sources_text = "\n---\n".join(
-        f"[{i+1}] (source: {c['metadata']['source']}) {c['text']}"
-        for i, c in enumerate(chunks)
-    )
-    generation = call_llm(ANSWER_PROMPT.format(question=request.question, sources=sources_text))
-    verification = verify_answer(generation["text"], chunks)
-
     return {
-        "answer": generation["text"],
+        "answer": final_state.get("draft_answer", ""),
+        # Map original chunks for backward compatibility
         "sources": [
             {
                 "source": c["metadata"]["source"],
@@ -106,7 +152,9 @@ def query(request: QueryRequest):
             }
             for c in chunks
         ],
+        "structured_citations": final_state.get("citations", []),
         "documents_found": get_contributing_documents(chunks),
-        "verification": verification,
-        "latency_seconds": generation["latency_seconds"],
+        "verification": final_state.get("verification_results", []),
+        "latency_seconds": round(time.time() - start, 3),
+        "research_plan": final_state.get("research_plan", {}),
     }
