@@ -37,7 +37,7 @@ from outside knowledge.
 ## Preview
 
 <p align="center">
-  <img src="docs/images/verityrag-ui.png" alt="VerityRAG workspace UI — sidebar with workspace switcher, uploaded PDFs, and recent chats; empty chat state with suggested prompts and the composer's + actions menu." width="820">
+  <img src="docs/images/verity-ui.png" alt="VerityRAG workspace UI — sidebar with workspace switcher, uploaded PDFs, and recent chats; empty chat state with suggested prompts and the composer's + actions menu." width="820">
 </p>
 
 <p align="center"><em>The research workspace: per-workspace document management, persistent conversation history, and every research-intelligence action reachable from a single composer menu.</em></p>
