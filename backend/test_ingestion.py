@@ -10,8 +10,8 @@ from ingest import (
 from retrieval import build_bm25_index, hybrid_retrieve
 
 def test_same_pdf_same_id():
-    path1 = "../data/attention.pdf"
-    path2 = "../data/attention_copy.pdf"
+    path1 = "tests/fixtures/attention.pdf"
+    path2 = "tests/fixtures/attention_copy.pdf"
     shutil.copy(path1, path2)
     
     id1 = get_document_id(path1)
@@ -22,8 +22,8 @@ def test_same_pdf_same_id():
     print("TEST 1 PASSED: Same PDF contents produce the same document_id")
 
 def test_different_pdf_different_id():
-    path1 = "../data/attention.pdf"
-    path2 = "../data/dummy.pdf"
+    path1 = "tests/fixtures/attention.pdf"
+    path2 = "tests/fixtures/dummy.pdf"
     with open(path2, "wb") as f:
         f.write(b"dummy")
         
@@ -62,7 +62,7 @@ def test_unique_chunk_ids():
     print("TEST 5 PASSED: Chunk IDs are unique within a document")
 
 def test_preserve_page_numbers():
-    pages = extract_pages_from_pdf("../data/attention.pdf")
+    pages = extract_pages_from_pdf("tests/fixtures/attention.pdf")
     assert len(pages) > 1, "PDF should have multiple pages"
     assert pages[0]["page_number"] == 1
     assert pages[1]["page_number"] == 2
@@ -82,7 +82,7 @@ def test_long_paragraph_split():
     print("TEST 8 PASSED: Very long paragraphs are safely split")
 
 def test_chroma_insertion():
-    res = ingest_document("../data/attention.pdf")
+    res = ingest_document("tests/fixtures/attention.pdf")
     assert res["chunks_added"] > 0, "Ingestion should succeed and add chunks"
     
     chunks = get_all_chunks()
@@ -108,7 +108,7 @@ def test_retrieval():
         "attention mechanism", 
         strategy="hybrid",
         top_k=2, 
-        document_ids=[get_document_id("../data/attention.pdf")]
+        document_ids=[get_document_id("tests/fixtures/attention.pdf")]
     )
     assert len(results) > 0, "Retrieval returned zero results"
     

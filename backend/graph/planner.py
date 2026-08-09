@@ -12,7 +12,7 @@ import os
 
 # Ensure we can import from the parent backend folder
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from query_transform import decompose_query, _call_groq_raw, _looks_complex
+from query_transform import decompose_query, _call_groq_raw, _looks_complex, decompose_query_deterministic
 from config import GROQ_API_KEY
 
 
@@ -62,6 +62,14 @@ def plan_research(state: dict) -> dict:
     references itself ("their" -> the papers already in context) instead of
     a separate query-rewriting LLM call.
 
+    Decomposition is also deterministic in normal mode: a genuinely
+    multi-aspect question (e.g. "Compare methodologies, datasets and
+    results") is split into per-aspect sub_queries by
+    decompose_query_deterministic() — rule-based, not an LLM call — so each
+    aspect gets its own retrieval pass before everything is fused back
+    together. A simple question always collapses back to a single
+    sub_query, unchanged from before.
+
     Only DEEP mode (explicitly requested by the user, never auto-triggered
     by this planner) uses the LLM-backed planner below.
     """
@@ -71,11 +79,16 @@ def plan_research(state: dict) -> dict:
     if research_type != "deep":
         plan = _fallback_plan(query)
         plan["resolved_query"] = query
-        plan["reasoning"] = "Normal mode: heuristic planning only, zero LLM calls."
+        sub_queries = decompose_query_deterministic(query)
+        plan["needs_decomposition"] = len(sub_queries) > 1
+        plan["reasoning"] = (
+            f"Normal mode: heuristic planning only, zero LLM calls "
+            f"({len(sub_queries)} sub-quer{'y' if len(sub_queries) == 1 else 'ies'})."
+        )
         return {
             "original_query": query,
             "research_plan": plan,
-            "sub_queries": [query],
+            "sub_queries": sub_queries,
             "research_type": research_type,
             "status": "planned (heuristic, no LLM call)",
         }

@@ -128,3 +128,54 @@ class ResearchReport(BaseModel):
     comparison: Optional[ComparisonReport] = None
     conclusion: str
     evidence_sufficient: bool = True
+
+
+# ---------------------------------------------------------------------------
+# Interview / analysis modes (Viva, Mock Test, Project Interview) — still ONE
+# LLM call per request, same validate-don't-trust discipline as everything
+# above.
+# ---------------------------------------------------------------------------
+
+class InterviewQuestion(BaseModel):
+    question: str
+    category: str = ""
+    difficulty: str = "intermediate"
+    expected_answer_points: list[str] = Field(default_factory=list)
+
+    @field_validator("expected_answer_points", mode="before")
+    @classmethod
+    def _coerce_points(cls, v):
+        return _coerce_to_str_list(v)
+
+
+class QuestionSetJSON(BaseModel):
+    """Output of ONE call that generates a batch of grounded questions
+    (Viva / Mock Test / Project Interview opening question set)."""
+    questions: list[InterviewQuestion] = Field(default_factory=list)
+    grounded: bool = True
+    evidence_sufficient: bool = True
+
+    @field_validator("questions", mode="before")
+    @classmethod
+    def _coerce_questions(cls, v):
+        if v is None:
+            return []
+        if isinstance(v, list):
+            return v
+        return []
+
+
+class AnswerEvaluationJSON(BaseModel):
+    """Output of ONE call that evaluates a user's answer during Project
+    Interview mode and proposes the next question."""
+    correctness: str = Field("unclear", description="'correct' | 'partially_correct' | 'incorrect' | 'unclear'")
+    missing_points: list[str] = Field(default_factory=list)
+    technical_depth: str = Field("", description="Brief assessment of depth/precision shown.")
+    suggested_answer: str = Field("", description="A better/more complete answer, grounded in the real implementation.")
+    next_question: str = Field("", description="The next interview question, or empty if the interview is complete.")
+    next_question_category: str = ""
+
+    @field_validator("missing_points", mode="before")
+    @classmethod
+    def _coerce_missing(cls, v):
+        return _coerce_to_str_list(v)

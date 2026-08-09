@@ -89,7 +89,7 @@ def test_collections_architecture():
 
 def test_chromadb_cleanup_after_deletion():
     # Use a real file to ingest
-    test_pdf_path = Path(__file__).parent.parent / "data" / "attention.pdf"
+    test_pdf_path = Path(__file__).parent / "tests" / "fixtures" / "attention.pdf"
     if not test_pdf_path.exists():
         pytest.skip("Test PDF not found.")
         

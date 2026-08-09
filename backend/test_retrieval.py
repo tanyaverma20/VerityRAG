@@ -63,7 +63,7 @@ from config import MAX_CONTEXT_TOKENS
 print("\n=== Phase 2 Retrieval Test Suite ===\n")
 print("Setting up: ingesting attention.pdf …")
 try:
-    res = ingest_document("../data/attention.pdf")
+    res = ingest_document("tests/fixtures/attention.pdf")
     print(f"  Ingestion result: {res['status']}, chunks: {res.get('chunks_added', 0)}, "
           f"doc_id: {res.get('document_id', 'N/A')}")
     PAPER_A_DOC_ID = res.get("document_id", "")

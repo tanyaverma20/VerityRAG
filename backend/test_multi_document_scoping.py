@@ -52,7 +52,7 @@ def _push_synthetic_document(document_id: str, text: str, filename: str) -> None
 def test_two_documents_strict_scoping():
     assert config.COLLECTION_NAME == "test_collection", "Must run inside the isolated Phase 8 fixture"
 
-    doc_a_id = get_document_id("../data/attention.pdf")  # already ingested by conftest.py
+    doc_a_id = get_document_id("tests/fixtures/attention.pdf")  # already ingested by conftest.py
     doc_b_id = "synthetic_paper_b_" + uuid.uuid4().hex[:8]
     _push_synthetic_document(doc_b_id, "RetentionAI predicts employee attrition using a five-stage AI pipeline.", "RetentionAI.pdf")
     build_bm25_index()

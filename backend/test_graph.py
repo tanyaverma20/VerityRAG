@@ -53,7 +53,7 @@ from retrieval import build_bm25_index
 # ---------------------------------------------------------------------------
 print("\n=== Phase 3 LangGraph Research Test Suite ===\n")
 try:
-    ingest_document("../data/attention.pdf")
+    ingest_document("tests/fixtures/attention.pdf")
     build_bm25_index()
 except Exception as e:
     print("Warning during setup:", e)

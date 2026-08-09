@@ -1,95 +1,149 @@
 # VerityRAG
 
-A research-paper QA system with hybrid retrieval (BM25 + dense + reranking)
-and claim-level verification — plus an evaluation harness that measures it
-against baselines instead of just claiming it works.
+VerityRAG is a research-focused AI assistant designed to stay grounded in
+the user's uploaded papers while minimizing unnecessary LLM usage.
+
+It is not "ChatGPT with a PDF attached." It is a hybrid-retrieval RAG
+pipeline — dense + BM25 + RRF fusion + cross-encoder reranking — with
+document-scoped grounding, a one-LLM-call normal mode, a controlled
+fallback model, structured/validated JSON output, multi-paper comparison,
+research report generation, answer caching, and an isolated test
+environment that never touches production data.
+
+**Design goal, stated honestly:** VerityRAG is *designed to minimize
+hallucination* through evidence grounding, structured self-assessment
+(`grounded` / `evidence_sufficient`), and explicit insufficient-evidence
+handling. It does not claim to mathematically guarantee zero
+hallucinations — no LLM-based system can.
+
+## The 15 differentiators
+
+1. **Evidence-first answers** — every answer is generated from chunks
+   retrieved from the user's currently active uploaded documents, never
+   from the whole PDF and never from outside knowledge.
+2. **Hallucination-resistant design** — the synthesis call self-reports
+   `grounded`/`evidence_sufficient` as part of its one structured JSON
+   response; no second "verifier" call in normal mode.
+3. **Token-efficient architecture** — a normal query is exactly one LLM
+   call on success (two only if the primary genuinely fails and the
+   fallback is used). No LLM calls for planning, query rewriting,
+   retrieval, reranking, or evidence selection.
+4. **Hybrid retrieval** — dense (semantic) + BM25 (exact terms, model/
+   dataset names, abbreviations), fused with Reciprocal Rank Fusion.
+5. **Cross-encoder reranking** — a local model, zero LLM calls.
+6. **Context/token budgeting** — deduplication, per-document diversity
+   caps, and a global token budget before anything reaches the LLM;
+   output length is separately capped and configurable.
+7. **Multi-paper comparison** — evidence from every selected paper is
+   grouped and handed to the *same single call*, never one call per paper.
+8. **Strict document workspace isolation** — the user's uploaded PDFs are
+   the only source of truth for normal queries; the canonical/legacy
+   Chroma corpus and `data/*.pdf` test fixtures never participate unless
+   explicitly scoped in.
+9. **Controlled fallback model** — primary `llama-3.3-70b-versatile`,
+   fallback `openai/gpt-oss-120b`, used at most once, only for genuinely
+   temporary failures (never for bad input, auth errors, or insufficient
+   evidence).
+10. **Structured JSON pipeline** — every LLM output is Pydantic-validated;
+    a malformed response is a clean failure, never a reason to retry
+    blindly, and raw JSON is never shown to the normal user.
+11. **Research report generation** — one call produces a structured report
+    (per-paper sections + cross-paper comparison), rendered deterministically
+    into Markdown, PDF, and DOCX — the LLM never formats the file itself.
+12. **Answer caching** — identical question + identical active document set
+    + identical conversation context ⇒ zero LLM calls. Any upload/removal
+    invalidates the cache immediately.
+13. **Research-focused UX** — a ChatGPT/Claude-style workspace: sidebar with
+    conversation history, per-document processing pipeline, clean answers
+    with no exposed chunk IDs, UUIDs, or raw scores.
+14. **Deep Research mode** — a separate LangGraph-orchestrated path with a
+    planner, adaptive retrieval, and cross-paper analysis, explicitly
+    bounded by `DEEP_RESEARCH_MAX_ITERATIONS` / `_MAX_LLM_CALLS` / `_MAX_RETRIES`
+    so it can never loop unbounded.
+15. **Observable pipeline** — every request logs LLM call count, which
+    model answered, fallback/cache status, token counts, and latency
+    internally (`logs/verityrag_events.jsonl`) — never surfaced in the
+    normal UI.
 
 ## Project structure
 
 ```
 verityrag/
   backend/
-    main.py            FastAPI app (upload, query, health endpoints)
-    ingest.py           PDF parsing, chunking, embedding, Chroma storage
-    retrieval.py         Hybrid retrieval: BM25 + dense + cross-encoder rerank
-    verify.py            Claim-level fact verification against sources
-    eval_harness.py       Compares naive / dense-only / hybrid+verify pipelines
-    llm.py               Groq API wrapper
-    config.py            All tunable settings in one place
+    main.py               FastAPI app — /query, /report, /upload, /health, sessions
+    ingest.py              PDF parsing, chunking, embedding, Chroma storage
+    retrieval.py            Hybrid retrieval: dense + BM25 + RRF + cross-encoder rerank
+    cache.py                In-memory answer/report cache
+    query_transform.py      Primary/fallback model call + LLM observability
+    schemas.py               Pydantic contracts for all LLM JSON output
+    report_generator.py      Structured report generation + Markdown/PDF/DOCX rendering
+    observability.py         Structured event logging (logs/verityrag_events.jsonl)
+    database.py               SQLite registry: documents, collections, sessions, messages
+    graph/                    LangGraph workflow (normal mode + Deep Research mode)
+    conftest.py                Phase 8 test isolation — temp Chroma/SQLite, never production
+    tests/fixtures/             Test-only PDFs, never part of the user workspace
+    chroma_store/                Canonical production ChromaDB — never rebuilt/re-ingested by tooling
     requirements.txt
   frontend/
-    index.html           No-build-step UI: upload, ask, see verification
+    index.html               Sidebar + chat UI: upload, ask, compare, generate reports
   data/
-    eval_set.json         Your held-out test questions (replace the sample)
-    eval_results.csv       Generated after running eval_harness.py
+    *.pdf                     Source PDFs behind the canonical corpus + eval harness fixtures
+    eval_set.json, eval_results_comprehensive.json   Evaluation harness inputs/outputs
   .env.example
 ```
 
-## Setup (in VS Code)
+## Setup
 
-1. Open the `verityrag` folder in VS Code.
-2. Open a terminal (`` Ctrl+` ``) and create a virtual environment:
-   ```bash
-   cd backend
-   python -m venv venv
-   source venv/bin/activate      # on Windows: venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
-3. Get a free Groq API key at https://console.groq.com/keys
-4. In the project root, copy `.env.example` to `.env` and paste in your key:
-   ```bash
-   cd ..
-   cp .env.example .env
-   ```
-   Edit `.env` and set `GROQ_API_KEY=...`
+```bash
+cd backend
+pip install -r requirements.txt
+```
+
+Copy `.env.example` to `.env` and set `GROQ_API_KEY`. Defaults for
+`GROQ_MODEL` / `GROQ_FALLBACK_MODEL` / retrieval tuning live in
+`backend/config.py` and can all be overridden via environment variables.
 
 ## Running it
 
-**Start the backend** (from the `backend/` folder, with venv active):
 ```bash
-uvicorn main:app --reload --port 8001
+cd backend
+python -m uvicorn main:app --host 127.0.0.1 --port 8001
 ```
-Visit `http://localhost:8001/health` — you should see `{"status":"ok","chunks_indexed":0}`.
 
-**Open the frontend**: just open `frontend/index.html` directly in your browser
-(no build step, no dev server needed). Upload a PDF, then ask a question.
+`GET http://127.0.0.1:8001/health` should return `{"status":"ok","chunks_indexed": <N>}`.
 
-## Running the evaluation harness
+Open `frontend/index.html` directly in a browser (no build step). Upload a
+PDF, wait for it to reach "Ready," then ask a question.
 
-This is the part that turns this from "a RAG demo" into something with real
-numbers behind it.
+## Testing
 
-1. Ingest a few real papers first (via the frontend upload, or `POST /upload`).
-2. Replace the placeholder questions in `data/eval_set.json` with real
-   questions you know the answer to from those papers.
-3. Run:
-   ```bash
-   cd backend
-   python eval_harness.py
-   ```
-4. Read the printed summary table and check `data/eval_results.csv` for the
-   full breakdown. This gives you real, defensible numbers like:
-   - accuracy proxy (naive vs dense-only vs hybrid+verify)
-   - average latency per pipeline
-   - average groundedness score from the verifier
+```bash
+cd backend
+python -m pytest test_llm_call_count.py test_reports_and_caching.py test_multi_document_scoping.py test_observability_and_budget.py test_ingestion.py -v
+```
 
-Put these numbers in your README and resume line instead of vague claims.
+These run against an isolated temp Chroma/SQLite environment (see
+`conftest.py`) and never touch `backend/chroma_store`. Most LLM-dependent
+assertions are mocked at the network boundary (`groq.Groq`) so the call
+count itself is proven, not assumed — see `test_llm_call_count.py`.
 
-## What to build next, in order
+The full historical regression suite (103+ tests across ingestion,
+retrieval, the LangGraph workflow, evaluation, and conversational memory)
+also exists but makes many real Groq calls; run it deliberately, not as a
+routine check, to avoid burning API quota.
 
-1. Get the base pipeline running end-to-end with 2-3 real papers.
-2. Build out `data/eval_set.json` to at least 20-30 real questions.
-3. Run `eval_harness.py`, save the comparison table — this is your strongest
-   talking point in interviews.
-4. Only after that works: consider adding the LangGraph planner/writer
-   agent split described in the architecture diagram. Don't add it before
-   the core pipeline is measured and solid — an agent wrapper around a
-   pipeline you haven't evaluated just adds surface area to defend.
+## Evaluation harness
 
-## Notes on scope
+`backend/eval_harness.py` compares naive / dense-only / hybrid+verify
+pipelines on `data/eval_set.json` and reports accuracy proxy, latency, and
+groundedness per pipeline — useful for backing up "grounded" and
+"low-hallucination" with actual numbers rather than a claim.
 
-This intentionally does NOT include Kubernetes, RBAC, multi-tenancy, or a
-built React app. Those are easy to add once the core pipeline is solid, but
-adding them first means you end up with a lot of surface area you can't
-speak to under questioning. Get the retrieval + verification + evaluation
-loop right first — that's the part that's actually rare.
+## Data safety
+
+The canonical Chroma collection (`verityrag_docs_v2`, in
+`backend/chroma_store/`) is production data and is never rebuilt, migrated,
+or re-ingested by any script or test in this repository. `data/*.pdf` are
+historical/eval fixtures, not part of any user's active workspace — the
+frontend never lists them, and the backend never searches them unless a
+request explicitly scopes them in by `document_id`.

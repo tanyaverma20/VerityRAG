@@ -29,11 +29,14 @@ def call_llm(prompt: str, system: str = "", temperature: float = 0.2) -> dict:
     messages.append({"role": "user", "content": prompt})
 
     def _attempt(model: str):
-        return _client.chat.completions.create(
+        resp = _client.chat.completions.create(
             model=model,
             messages=messages,
             temperature=temperature,
         )
+        usage = resp.usage
+        usage_dict = {"prompt_tokens": usage.prompt_tokens, "completion_tokens": usage.completion_tokens} if usage else None
+        return resp, usage_dict
 
     start = time.time()
     response = with_model_fallback(_attempt)

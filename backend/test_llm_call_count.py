@@ -159,13 +159,16 @@ def test_insufficient_evidence_one_llm_call():
 def test_primary_success_no_fallback():
     def make_request(model):
         assert model == config.GROQ_MODEL
-        return "ok"
+        return "ok", {"prompt_tokens": 100, "completion_tokens": 20}
 
     result = with_model_fallback(make_request)
     log = get_call_log()
     assert result == "ok"
     assert len(log) == 1
-    assert log[0] == {"model": config.GROQ_MODEL, "role": "primary", "success": True}
+    assert log[0]["model"] == config.GROQ_MODEL
+    assert log[0]["role"] == "primary" and log[0]["success"] is True
+    assert log[0]["prompt_tokens"] == 100 and log[0]["completion_tokens"] == 20
+    assert log[0]["total_tokens"] == 120
 
 
 # ---------------------------------------------------------------------------
@@ -178,7 +181,7 @@ def test_primary_temporary_failure_triggers_one_fallback():
     def make_request(model):
         if model == config.GROQ_MODEL:
             raise _FakeRateLimitError("429 rate limit exceeded")
-        return "fallback answer"
+        return "fallback answer", {"prompt_tokens": 80, "completion_tokens": 15}
 
     result = with_model_fallback(make_request)
     log = get_call_log()
@@ -240,7 +243,7 @@ def test_scoped_retrieval_excludes_other_documents():
     from ingest import get_document_id
     from retrieval import build_bm25_index, retrieve
 
-    test_pdf = Path(__file__).parent.parent / "data" / "attention.pdf"
+    test_pdf = Path(__file__).parent / "tests" / "fixtures" / "attention.pdf"
     if not test_pdf.exists():
         pytest.skip("Test PDF not found.")
 

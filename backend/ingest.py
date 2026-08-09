@@ -199,7 +199,7 @@ def chunk_page(page: dict, doc_id: str, start_chunk_idx: int, current_section: s
     return chunks, chunk_idx, current_section
 
 
-def ingest_document(file_path: str, original_filename: str | None = None) -> dict:
+def ingest_document(file_path: str, original_filename: str | None = None, workspace_id: str | None = None) -> dict:
     """
     Ingests a single PDF with page/section awareness and deterministic IDs.
 
@@ -207,16 +207,24 @@ def ingest_document(file_path: str, original_filename: str | None = None) -> dic
     `file_path` points at a temp file (e.g. the /upload endpoint, which copies
     the upload into a NamedTemporaryFile before this runs). Defaults to the
     path's own name so bulk-ingestion scripts and tests are unaffected.
+
+    `workspace_id` tags the document's SQLite row so /documents?workspace_id=
+    can list it — this is metadata for scoping which document_ids a given
+    workspace is allowed to use, not a separate Chroma collection/namespace;
+    retrieval isolation itself still runs on the existing document_id filter
+    (retrieval.py), unchanged. Omitting it (existing callers, tests, scripts)
+    behaves exactly as before.
     """
     path = Path(file_path)
     display_name = original_filename or path.name
     doc_id = get_document_id(str(path))
 
     # 1. Register document in SQLite
-    add_document(doc_id, display_name, status="PROCESSING")
+    add_document(doc_id, display_name, status="PROCESSING", workspace_id=workspace_id)
     
     try:
         pages = extract_pages_from_pdf(str(path))
+        page_count = len(pages)
         if not pages:
             update_document_status(doc_id, status="FAILED", error_message="No text extracted")
             return {"filename": display_name, "chunks_added": 0, "status": "no_text_extracted"}
@@ -257,8 +265,8 @@ def ingest_document(file_path: str, original_filename: str | None = None) -> dic
         col.delete(where={"document_id": doc_id})
         col.add(documents=texts, ids=ids, metadatas=metadatas)
 
-        update_document_status(doc_id, status="INDEXED", chunk_count=len(all_chunks))
-        return {"filename": display_name, "chunks_added": len(all_chunks), "status": "ok", "document_id": doc_id}
+        update_document_status(doc_id, status="INDEXED", chunk_count=len(all_chunks), page_count=page_count)
+        return {"filename": display_name, "chunks_added": len(all_chunks), "status": "ok", "document_id": doc_id, "page_count": page_count}
     
     except Exception as e:
         update_document_status(doc_id, status="FAILED", error_message=str(e))

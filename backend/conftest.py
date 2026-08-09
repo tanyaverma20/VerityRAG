@@ -36,7 +36,9 @@ def isolated_test_env():
     from ingest import ingest_document
     from retrieval import build_bm25_index
     try:
-        test_pdf = os.path.join(Path(__file__).parent.parent, "data", "attention.pdf")
+        # Dedicated test fixture, not the data/ folder (item 21) — a copy of
+        # the same file (content-hash document_id is identical either way).
+        test_pdf = os.path.join(Path(__file__).parent, "tests", "fixtures", "attention.pdf")
         if os.path.exists(test_pdf):
             ingest_document(test_pdf)
             build_bm25_index()

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>VerityRAG — Document Scoping Tests</title>
+<style>
+  body { font-family: -apple-system, sans-serif; max-width: 780px; margin: 30px auto; padding: 0 16px; color: #1c1e21; }
+  h1 { font-size: 18px; }
+  .case { padding: 10px 14px; border-radius: 8px; margin-bottom: 8px; border: 1px solid #e4e6ea; }
+  .pass { background: #f0fdf4; border-color: #86efac; }
+  .fail { background: #fef2f2; border-color: #fca5a5; }
+  .name { font-weight: 600; font-size: 13.5px; }
+  .detail { font-size: 12.5px; color: #6b7280; margin-top: 4px; font-family: monospace; white-space: pre-wrap; }
+  #summary { font-size: 15px; font-weight: 700; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>VerityRAG — deterministic document-scoping tests</h1>
+<p style="color:#6b7280; font-size: 13px;">
+  Exercises the REAL <code>resolveQueryScope()</code> / <code>detectDocumentScopeFromText()</code>
+  from <code>index.html</code>, loaded fresh into an isolated iframe. No LLM calls, no backend
+  required — pure deterministic frontend logic. Open this file directly in a browser to re-run.
+</p>
+<div id="summary">Running…</div>
+<div id="results"></div>
+
+<script>
+async function loadApp() {
+  const resp = await fetch('index.html?_=' + Date.now(), { cache: 'no-store' });
+  const html = await resp.text();
+  const iframe = document.createElement('iframe');
+  iframe.style.display = 'none';
+  document.body.appendChild(iframe);
+  iframe.srcdoc = html;
+  await new Promise(r => { iframe.onload = r; });
+  await new Promise(r => setTimeout(r, 300));
+  return iframe;
+}
+
+function setPapers(win, papersArr) {
+  win.eval(`papers = ${JSON.stringify(papersArr)};`);
+}
+
+async function freshConversation(win, selectedDocIds) {
+  await win.createConversation();
+  win.eval(`getActiveConversation().selectedDocIds = ${JSON.stringify(selectedDocIds || [])};`);
+}
+
+function sameSet(a, b) {
+  if (a.length !== b.length) return false;
+  const sa = [...a].sort(), sb = [...b].sort();
+  return sa.every((v, i) => v === sb[i]);
+}
+
+const results = [];
+function check(name, got, expected) {
+  const pass = sameSet(got, expected);
+  results.push({ name, pass, got, expected });
+}
+
+async function run() {
+  const iframe = await loadApp();
+  const win = iframe.contentWindow;
+
+  const P1 = { id: "p1", document_id: "docA", filename: "attention.pdf", status: "ready" };
+  const P2 = { id: "p2", document_id: "docB", filename: "BERT.pdf", status: "ready" };
+  const P3 = { id: "p3", document_id: "docC", filename: "2005.14165v4.pdf", status: "ready" }; // arXiv-style numeric name
+
+  // --- Case 1: exactly one PDF uploaded => every question uses it ---
+  setPapers(win, [P1]);
+  await freshConversation(win, []);
+  check("1 PDF uploaded, generic question -> only that PDF",
+    win.resolveQueryScope("What is the main contribution?", null), ["docA"]);
+
+  // --- Case 2: two PDFs, question names ONE -> only that one ---
+  setPapers(win, [P1, P2]);
+  await freshConversation(win, []);
+  check("2 PDFs, question names one (attention) -> only that PDF",
+    win.resolveQueryScope("What datasets were used in attention.pdf?", null), ["docA"]);
+  check("2 PDFs, question names the other (BERT) -> only that PDF",
+    win.resolveQueryScope("What architecture does BERT use?", null), ["docB"]);
+
+  // --- Case 3: question names TWO -> only those two ---
+  setPapers(win, [P1, P2, P3]);
+  await freshConversation(win, []);
+  check("3 PDFs, question names two (attention + BERT) -> only those two",
+    win.resolveQueryScope("Compare attention.pdf and BERT.pdf.", null), ["docA", "docB"]);
+
+  // --- Case 4: "Compare them" with an active selection -> all selected ---
+  setPapers(win, [P1, P2, P3]);
+  await freshConversation(win, ["docA", "docB"]);
+  check('"Compare them" with docA+docB selected -> those selected PDFs',
+    win.resolveQueryScope("Compare them.", null), ["docA", "docB"]);
+  check('"Which paper is better?" with docA+docB selected -> those selected PDFs',
+    win.resolveQueryScope("Which paper is better?", null), ["docA", "docB"]);
+
+  // --- Case 5: explicit "all papers" overrides a partial selection ---
+  setPapers(win, [P1, P2, P3]);
+  await freshConversation(win, ["docA", "docB"]); // only 2 of 3 selected
+  check('"Summarize all three papers" overrides partial selection -> ALL active PDFs',
+    win.resolveQueryScope("Summarize all three papers.", null), ["docA", "docB", "docC"]);
+  check('"What do all the documents conclude?" -> ALL active PDFs',
+    win.resolveQueryScope("What do all the documents conclude?", null), ["docA", "docB", "docC"]);
+
+  // --- Case 6: no name, no selection, general workspace question -> all active ---
+  setPapers(win, [P1, P2, P3]);
+  await freshConversation(win, []);
+  check("No name/selection, general question -> all active PDFs",
+    win.resolveQueryScope("Which paper discusses retrieval augmentation?", null), ["docA", "docB", "docC"]);
+
+  // --- Case 7: 3+ PDFs, correct subset via per-card Summarize (forceDocIds) ---
+  setPapers(win, [P1, P2, P3]);
+  await freshConversation(win, ["docA", "docB", "docC"]); // all selected
+  check("Per-card Summarize forces exactly that one PDF, ignoring selection/all",
+    win.resolveQueryScope("Summarize this paper.", ["docC"]), ["docC"]);
+
+  // --- Case 8: numeric arXiv-style filename never false-positive matches ---
+  setPapers(win, [P1, P3]); // P3 = "2005.14165v4.pdf"
+  await freshConversation(win, []);
+  check("Numeric arXiv filename does NOT false-positive match a coincidental number -> all active (no name lock-in)",
+    win.resolveQueryScope("How many benchmarks were released in 2005?", null), ["docA", "docC"]);
+
+  // --- Case 9: legacy/unrelated documents never enter scope ---
+  setPapers(win, [P1, P2]);
+  await freshConversation(win, []);
+  const scope9 = win.resolveQueryScope("Summarize the papers.", null);
+  const onlyKnownDocs = scope9.every(id => ["docA", "docB"].includes(id));
+  results.push({
+    name: "Scope never contains an ID outside the active workspace (no legacy/data/ leakage)",
+    pass: onlyKnownDocs, got: scope9, expected: "subset of [docA, docB]",
+  });
+
+  // --- Case 10: removed PDF excluded even if it was previously selected ---
+  setPapers(win, [P1]); // docB removed from `papers` entirely
+  win.eval(`getActiveConversation().selectedDocIds = ["docA", "docB"];`); // stale selection incl. removed doc
+  check("Stale selection referencing a removed document is filtered out",
+    win.resolveQueryScope("Summarize this.", null), ["docA"]);
+
+  document.body.removeChild(iframe);
+
+  const passCount = results.filter(r => r.pass).length;
+  document.getElementById("summary").textContent =
+    `${passCount} / ${results.length} passed` + (passCount === results.length ? " ✅" : " ❌");
+  document.getElementById("summary").style.color = passCount === results.length ? "#1f9d55" : "#dc4c4c";
+
+  document.getElementById("results").innerHTML = results.map(r => `
+    <div class="case ${r.pass ? 'pass' : 'fail'}">
+      <div class="name">${r.pass ? '✓' : '✗'} ${r.name}</div>
+      <div class="detail">got: ${JSON.stringify(r.got)}\nexpected: ${JSON.stringify(r.expected)}</div>
+    </div>
+  `).join("");
+
+  console.log(`Document scoping tests: ${passCount}/${results.length} passed`);
+  window.__scopingTestResults = results;
+}
+
+run();
+</script>
+</body>
+</html>

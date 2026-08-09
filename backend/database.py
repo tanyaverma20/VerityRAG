@@ -16,10 +16,53 @@ def get_connection():
     conn.execute("PRAGMA foreign_keys = ON;")
     return conn
 
+def _migrate_schema(conn) -> None:
+    """
+    Additive-only migrations for a pre-existing registry.db (never drops or
+    rewrites a table — this DB already holds real historical documents/
+    sessions/messages from prior live testing and must not lose any of it).
+
+    Adds workspace_id (documents, sessions) and title (sessions) columns if
+    an older schema is missing them, then backfills every pre-existing NULL
+    workspace_id to one auto-created "My Research" workspace so nothing that
+    already existed silently disappears from the new workspace-scoped UI.
+    """
+    doc_cols = {r["name"] for r in conn.execute("PRAGMA table_info(documents)")}
+    if "workspace_id" not in doc_cols:
+        conn.execute("ALTER TABLE documents ADD COLUMN workspace_id TEXT")
+
+    session_cols = {r["name"] for r in conn.execute("PRAGMA table_info(sessions)")}
+    if "workspace_id" not in session_cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN workspace_id TEXT")
+    if "title" not in session_cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN title TEXT")
+
+    orphaned = conn.execute(
+        "SELECT COUNT(*) c FROM documents WHERE workspace_id IS NULL "
+        "UNION ALL SELECT COUNT(*) c FROM sessions WHERE workspace_id IS NULL"
+    ).fetchall()
+    if any(row["c"] > 0 for row in orphaned):
+        now = _now()
+        default_ws_id = "default"
+        conn.execute("""
+            INSERT OR IGNORE INTO workspaces (workspace_id, name, created_at, updated_at)
+            VALUES (?, 'My Research', ?, ?)
+        """, (default_ws_id, now, now))
+        conn.execute("UPDATE documents SET workspace_id = ? WHERE workspace_id IS NULL", (default_ws_id,))
+        conn.execute("UPDATE sessions SET workspace_id = ? WHERE workspace_id IS NULL", (default_ws_id,))
+
+
 def init_db():
     conn = get_connection()
     with conn:
         conn.executescript("""
+            CREATE TABLE IF NOT EXISTS workspaces (
+                workspace_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS documents (
                 document_id TEXT PRIMARY KEY,
                 filename TEXT NOT NULL,
@@ -30,6 +73,7 @@ def init_db():
                 chunk_count INTEGER DEFAULT 0,
                 ingestion_status TEXT NOT NULL,
                 error_message TEXT,
+                workspace_id TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
@@ -52,6 +96,8 @@ def init_db():
             CREATE TABLE IF NOT EXISTS sessions (
                 session_id TEXT PRIMARY KEY,
                 collection_id TEXT,
+                workspace_id TEXT,
+                title TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 FOREIGN KEY (collection_id) REFERENCES collections(collection_id) ON DELETE SET NULL
@@ -80,6 +126,7 @@ def init_db():
                 FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
             );
         """)
+        _migrate_schema(conn)
     conn.close()
 
 def _now() -> str:
@@ -87,30 +134,40 @@ def _now() -> str:
 
 # --- Document Operations ---
 
-def add_document(document_id: str, filename: str, status: str = "UPLOADED") -> dict:
+def add_document(document_id: str, filename: str, status: str = "UPLOADED", workspace_id: Optional[str] = None) -> dict:
     conn = get_connection()
     now = _now()
     with conn:
         conn.execute("""
-            INSERT INTO documents (document_id, filename, ingestion_status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO documents (document_id, filename, ingestion_status, workspace_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(document_id) DO UPDATE SET
                 filename = excluded.filename,
                 ingestion_status = excluded.ingestion_status,
+                workspace_id = COALESCE(excluded.workspace_id, documents.workspace_id),
                 updated_at = excluded.updated_at
-        """, (document_id, filename, status, now, now))
+        """, (document_id, filename, status, workspace_id, now, now))
+        if workspace_id:
+            touch_workspace(workspace_id, conn=conn)
     conn.close()
     return get_document(document_id)
 
-def update_document_status(document_id: str, status: str, chunk_count: int = 0, error_message: Optional[str] = None):
+def update_document_status(document_id: str, status: str, chunk_count: int = 0, error_message: Optional[str] = None, page_count: Optional[int] = None):
     conn = get_connection()
     now = _now()
     with conn:
-        conn.execute("""
-            UPDATE documents
-            SET ingestion_status = ?, chunk_count = ?, error_message = ?, updated_at = ?
-            WHERE document_id = ?
-        """, (status, chunk_count, error_message, now, document_id))
+        if page_count is not None:
+            conn.execute("""
+                UPDATE documents
+                SET ingestion_status = ?, chunk_count = ?, page_count = ?, error_message = ?, updated_at = ?
+                WHERE document_id = ?
+            """, (status, chunk_count, page_count, error_message, now, document_id))
+        else:
+            conn.execute("""
+                UPDATE documents
+                SET ingestion_status = ?, chunk_count = ?, error_message = ?, updated_at = ?
+                WHERE document_id = ?
+            """, (status, chunk_count, error_message, now, document_id))
     conn.close()
 
 def get_document(document_id: str) -> Optional[dict]:
@@ -119,17 +176,110 @@ def get_document(document_id: str) -> Optional[dict]:
     conn.close()
     return dict(row) if row else None
 
-def list_documents() -> List[dict]:
+def list_documents(workspace_id: Optional[str] = None) -> List[dict]:
     conn = get_connection()
-    rows = conn.execute("SELECT * FROM documents ORDER BY created_at DESC").fetchall()
+    if workspace_id:
+        rows = conn.execute(
+            "SELECT * FROM documents WHERE workspace_id = ? ORDER BY created_at DESC", (workspace_id,)
+        ).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM documents ORDER BY created_at DESC").fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+
+def documents_in_workspace(document_ids: List[str], workspace_id: str) -> List[str]:
+    """Filters document_ids down to only those that actually belong to
+    workspace_id — the data-layer isolation check behind /query's
+    workspace_id parameter (never trusts the caller's list at face value)."""
+    if not document_ids or not workspace_id:
+        return []
+    conn = get_connection()
+    placeholders = ",".join("?" for _ in document_ids)
+    rows = conn.execute(
+        f"SELECT document_id FROM documents WHERE workspace_id = ? AND document_id IN ({placeholders})",
+        (workspace_id, *document_ids),
+    ).fetchall()
+    conn.close()
+    valid = {r["document_id"] for r in rows}
+    return [d for d in document_ids if d in valid]
 
 def delete_document(document_id: str):
     conn = get_connection()
     with conn:
         conn.execute("DELETE FROM documents WHERE document_id = ?", (document_id,))
     conn.close()
+
+# --- Workspace Operations ---
+#
+# A workspace is a container for a set of documents + conversations. RAG
+# isolation itself still runs on the existing document_id-scoped Chroma
+# filtering (retrieval.py) — nothing about the vector store changes. What's
+# new is that the *list* of document_ids a request is allowed to use is now
+# resolved from a workspace-filtered SQLite query (list_documents/
+# documents_in_workspace above) instead of being trusted from the client
+# unconditionally, so workspace isolation is enforced at the data layer, not
+# just by the frontend never showing the wrong papers.
+
+def create_workspace(workspace_id: str, name: str) -> dict:
+    conn = get_connection()
+    now = _now()
+    with conn:
+        conn.execute("""
+            INSERT INTO workspaces (workspace_id, name, created_at, updated_at)
+            VALUES (?, ?, ?, ?)
+        """, (workspace_id, name, now, now))
+    conn.close()
+    return get_workspace(workspace_id)
+
+
+def get_workspace(workspace_id: str) -> Optional[dict]:
+    conn = get_connection()
+    row = conn.execute("SELECT * FROM workspaces WHERE workspace_id = ?", (workspace_id,)).fetchone()
+    if not row:
+        conn.close()
+        return None
+    d = dict(row)
+    d["paper_count"] = conn.execute(
+        "SELECT COUNT(*) c FROM documents WHERE workspace_id = ?", (workspace_id,)
+    ).fetchone()["c"]
+    d["chat_count"] = conn.execute(
+        "SELECT COUNT(*) c FROM sessions WHERE workspace_id = ?", (workspace_id,)
+    ).fetchone()["c"]
+    conn.close()
+    return d
+
+
+def list_workspaces() -> List[dict]:
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM workspaces ORDER BY updated_at DESC").fetchall()
+    out = []
+    for row in rows:
+        d = dict(row)
+        d["paper_count"] = conn.execute(
+            "SELECT COUNT(*) c FROM documents WHERE workspace_id = ?", (d["workspace_id"],)
+        ).fetchone()["c"]
+        d["chat_count"] = conn.execute(
+            "SELECT COUNT(*) c FROM sessions WHERE workspace_id = ?", (d["workspace_id"],)
+        ).fetchone()["c"]
+        out.append(d)
+    conn.close()
+    return out
+
+
+def touch_workspace(workspace_id: str, conn=None) -> None:
+    """Bumps updated_at — called on upload/new-chat so the sidebar can order
+    workspaces by recent activity. Accepts an existing connection so callers
+    already inside a transaction (e.g. add_document) don't open a second one."""
+    now = _now()
+    if conn is not None:
+        conn.execute("UPDATE workspaces SET updated_at = ? WHERE workspace_id = ?", (now, workspace_id))
+        return
+    own_conn = get_connection()
+    with own_conn:
+        own_conn.execute("UPDATE workspaces SET updated_at = ? WHERE workspace_id = ?", (now, workspace_id))
+    own_conn.close()
+
 
 # --- Collection Operations ---
 
@@ -193,14 +343,16 @@ def delete_collection(collection_id: str):
 
 # --- Session Operations ---
 
-def create_session(session_id: str, collection_id: Optional[str] = None) -> dict:
+def create_session(session_id: str, collection_id: Optional[str] = None, workspace_id: Optional[str] = None, title: Optional[str] = None) -> dict:
     conn = get_connection()
     now = _now()
     with conn:
         conn.execute("""
-            INSERT INTO sessions (session_id, collection_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?)
-        """, (session_id, collection_id, now, now))
+            INSERT INTO sessions (session_id, collection_id, workspace_id, title, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (session_id, collection_id, workspace_id, title, now, now))
+        if workspace_id:
+            touch_workspace(workspace_id, conn=conn)
     conn.close()
     return get_session(session_id)
 
@@ -210,11 +362,23 @@ def get_session(session_id: str) -> Optional[dict]:
     conn.close()
     return dict(row) if row else None
 
-def list_sessions() -> List[dict]:
+def list_sessions(workspace_id: Optional[str] = None) -> List[dict]:
     conn = get_connection()
-    rows = conn.execute("SELECT * FROM sessions ORDER BY created_at DESC").fetchall()
+    if workspace_id:
+        rows = conn.execute(
+            "SELECT * FROM sessions WHERE workspace_id = ? ORDER BY updated_at DESC", (workspace_id,)
+        ).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM sessions ORDER BY updated_at DESC").fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+def update_session_title(session_id: str, title: str) -> None:
+    conn = get_connection()
+    now = _now()
+    with conn:
+        conn.execute("UPDATE sessions SET title = ?, updated_at = ? WHERE session_id = ?", (title, now, session_id))
+    conn.close()
 
 def delete_session(session_id: str):
     conn = get_connection()

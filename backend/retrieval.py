@@ -36,6 +36,8 @@ Why CrossEncoder AFTER RRF?
 
 from __future__ import annotations
 
+import contextvars
+
 from rank_bm25 import BM25Okapi
 from sentence_transformers import CrossEncoder
 
@@ -44,6 +46,29 @@ from config import (
     RERANKER_MODEL, RRF_K, MAX_CONTEXT_TOKENS, MAX_CHUNKS_PER_DOC,
 )
 from ingest import get_collection, get_all_chunks
+
+# ---------------------------------------------------------------------------
+# Retrieval-stage observability — real, per-request candidate/rerank counts
+# for the frontend's collapsible "Retrieval Details" panel (never invented
+# numbers). Mirrors query_transform.py's _call_log contextvar pattern: a
+# per-request slot, safe across concurrent requests (each threadpool worker
+# thread gets its own contextvar value), diagnostic-only — never influences
+# retrieval behavior itself.
+# ---------------------------------------------------------------------------
+_retrieval_stats: contextvars.ContextVar[dict | None] = contextvars.ContextVar("_retrieval_stats", default=None)
+
+
+def get_retrieval_stats() -> dict:
+    """Real counts from the most recent retrieve()/retrieve_multi() call on
+    this request's thread: candidates_retrieved (post-RRF fusion, pre-rerank
+    pool size) and reranked_to (final chunk count after budget/truncation).
+    Empty dict if no retrieval has run yet this request."""
+    stats = _retrieval_stats.get()
+    return dict(stats) if stats else {}
+
+
+def _record_retrieval_stats(candidates_retrieved: int, reranked_to: int) -> None:
+    _retrieval_stats.set({"candidates_retrieved": candidates_retrieved, "reranked_to": reranked_to})
 
 # ---------------------------------------------------------------------------
 # Module-level singletons
@@ -336,6 +361,19 @@ def select_within_token_budget(
       3. Preserves the existing rerank_score ordering (best first).
 
     Chunks are assumed to arrive in relevance order (highest score first).
+
+    IMPORTANT: every caller that formats these chunks into a prompt (Q&A
+    synthesis, report generation, /analyze's viva/mock-test/interview/
+    explain-figure evidence) sends `parent_context` when present, not the
+    shorter child `text` — expand_with_parent_context() already runs before
+    this function in retrieve(), so parent_context is normally already
+    attached by the time we get here. Budgeting on `text` alone was
+    silently undercounting real prompt size by 2-5x (measured: a real
+    2-document report prompt came out to ~7100 tokens against a 6000-token
+    budget that had only counted ~2100), which could push an oversized,
+    unbalanced prompt at the model and made it more likely to drop or
+    truncate one document's content. Estimating from the same field that's
+    actually sent keeps the budget honest.
     """
     selected: list[dict] = []
     tokens_used = 0
@@ -343,7 +381,7 @@ def select_within_token_budget(
 
     for c in chunks:
         doc_id = c.get("metadata", {}).get("document_id", "__unknown__")
-        text_tokens = _estimate_tokens(c["text"])
+        text_tokens = _estimate_tokens(c.get("parent_context") or c["text"])
 
         if tokens_used + text_tokens > max_tokens:
             continue  # skip if budget exhausted
@@ -459,7 +497,84 @@ def retrieve(
     if apply_token_budget:
         reranked = select_within_token_budget(reranked, max_per_doc=MAX_CHUNKS_PER_DOC)
 
-    return reranked[:top_k]
+    final = reranked[:top_k]
+    _record_retrieval_stats(len(candidates), len(final))
+    return final
+
+
+# ---------------------------------------------------------------------------
+# Multi-sub-query retrieval — for deterministically decomposed complex
+# questions (see query_transform.decompose_query_deterministic).
+# ---------------------------------------------------------------------------
+
+def retrieve_multi(
+    sub_queries: list[str],
+    document_ids: list[str] | None = None,
+    top_k: int = RERANK_TOP_K,
+    apply_parent_context: bool = True,
+    apply_token_budget: bool = True,
+    rerank_query: str | None = None,
+) -> list[dict]:
+    """
+    Retrieval for a list of sub-queries produced by deterministic
+    decomposition of one complex question.
+
+    Each sub_query gets its own dense_search()/bm25_search() pass — still
+    document-scoped identically to the single-query path — but everything
+    is fused with ONE Reciprocal Rank Fusion call across all sub-queries'
+    ranked lists (so a chunk surfaced by multiple sub-queries correctly
+    accumulates rank credit instead of being scored in isolation N times),
+    then reranked ONCE, globally, against `rerank_query` (the original,
+    undecomposed question — the CrossEncoder should judge relevance to what
+    the user actually asked, not to a synthetic single-aspect fragment),
+    then parent-context-expanded / deduplicated / token-budgeted exactly
+    like retrieve() does for a single query.
+
+    With 0 or 1 sub_queries this simply delegates to retrieve(), so the
+    common case (a simple question) is byte-for-byte the existing,
+    unchanged single-query behavior.
+    """
+    if len(sub_queries) <= 1:
+        q = sub_queries[0] if sub_queries else (rerank_query or "")
+        return retrieve(
+            query=q,
+            document_ids=document_ids,
+            top_k=top_k,
+            apply_parent_context=apply_parent_context,
+            apply_token_budget=apply_token_budget,
+        )
+
+    rerank_query = rerank_query or sub_queries[0]
+
+    # --- 1. Dense + BM25 for EACH sub-query, independently document-scoped ---
+    ranked_lists: list[list[dict]] = []
+    for sq in sub_queries:
+        ranked_lists.append(dense_search(sq, top_k=DENSE_TOP_K, document_ids=document_ids))
+        ranked_lists.append(bm25_search(sq, top_k=BM25_TOP_K, document_ids=document_ids))
+
+    # --- 2. ONE global RRF fusion pass across every sub-query's results ---
+    candidates = reciprocal_rank_fusion(*ranked_lists)
+    if not candidates:
+        return []
+
+    # --- 3. CrossEncoder reranking ONCE, globally, against the real question ---
+    reranked = rerank(rerank_query, candidates, top_k=max(top_k * 3, RERANK_TOP_K * 3))
+
+    # --- 4. Parent context expansion ---
+    if apply_parent_context:
+        reranked = expand_with_parent_context(reranked)
+
+    # --- 5. Deduplication ---
+    reranked = deduplicate_chunks(reranked)
+
+    # --- 6. Token-budget selection with per-doc diversity (ONE global budget,
+    #        not one per sub-query) ---
+    if apply_token_budget:
+        reranked = select_within_token_budget(reranked, max_per_doc=MAX_CHUNKS_PER_DOC)
+
+    final = reranked[:top_k]
+    _record_retrieval_stats(len(candidates), len(final))
+    return final
 
 
 # ---------------------------------------------------------------------------

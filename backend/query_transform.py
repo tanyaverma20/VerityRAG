@@ -45,10 +45,26 @@ def get_call_log() -> list[dict]:
     return list(log) if log is not None else []
 
 
-def _record_call(model: str, role: str, success: bool) -> None:
+def get_token_totals() -> dict:
+    """Aggregate input/output/total tokens across every physical call this
+    request made so far — item 15's input_tokens/output_tokens/total_tokens."""
+    log = get_call_log()
+    prompt = sum(c.get("prompt_tokens", 0) for c in log)
+    completion = sum(c.get("completion_tokens", 0) for c in log)
+    return {"input_tokens": prompt, "output_tokens": completion, "total_tokens": prompt + completion}
+
+
+def _record_call(model: str, role: str, success: bool, usage: dict | None = None) -> None:
     log = _call_log.get()
     if log is not None:
-        log.append({"model": model, "role": role, "success": success})
+        usage = usage or {}
+        prompt_tokens = usage.get("prompt_tokens") or 0
+        completion_tokens = usage.get("completion_tokens") or 0
+        log.append({
+            "model": model, "role": role, "success": success,
+            "prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens,
+        })
 
 # ---------------------------------------------------------------------------
 # Heuristics — avoid LLM calls for simple queries
@@ -98,6 +114,87 @@ def _looks_complex(query: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Deterministic (zero-LLM-cost) query decomposition
+#
+# Used by graph/planner.py in NORMAL mode so a genuinely multi-aspect
+# question (e.g. "Compare methodologies, datasets and results") retrieves
+# evidence for each aspect independently, without ever calling the LLM to
+# decide how to split it. This is intentionally NOT the same thing as
+# decompose_query() above (which is LLM-backed and Deep-Research-only) —
+# normal mode must stay at zero planning LLM calls.
+# ---------------------------------------------------------------------------
+
+_ASPECT_NOUNS = {
+    "methodology", "methodologies", "method", "methods",
+    "dataset", "datasets", "data",
+    "result", "results", "finding", "findings",
+    "metric", "metrics", "performance",
+    "architecture", "architectures", "model", "models",
+    "limitation", "limitations",
+    "contribution", "contributions",
+    "approach", "approaches", "technique", "techniques",
+    "evaluation", "evaluations", "baseline", "baselines",
+    "conclusion", "conclusions", "experiment", "experiments",
+}
+
+# Splits a comma/"and"-joined list into its items, e.g.
+# "methodologies, datasets and results" -> ["methodologies", "datasets", "results"]
+_LIST_ITEM_SPLIT_RE = re.compile(r',\s*(?:and\s+)?|\s+and\s+')
+
+# Bounds sub-query count so decomposition can never blow up retrieval/rerank/
+# token cost — a handful of aspects is the realistic ceiling for one question.
+MAX_DECOMPOSED_SUB_QUERIES = 4
+
+
+def decompose_query_deterministic(query: str) -> list[str]:
+    """
+    Rule-based, zero-LLM-cost decomposition for questions with multiple
+    distinct information needs. Never splits arbitrarily by word count or
+    fixed length — only triggers when BOTH are true:
+      1. The question contains a comparison/aggregation signal (_looks_complex).
+      2. The question contains an explicit comma/"and"-joined list of 2+
+         recognised research-paper aspect nouns (methodology, datasets,
+         results, architecture, ...).
+
+    "Compare methodologies, datasets and results" ->
+        ["methodologies: Compare methodologies, datasets and results",
+         "datasets: Compare methodologies, datasets and results",
+         "results: Compare methodologies, datasets and results"]
+
+    Every other question — including ones that merely say "compare" without
+    an aspect list (e.g. "Compare the two papers", "What's the difference
+    between BERT and GPT?") — returns [query] unchanged, so retrieval stays
+    a single search, exactly as required for simple questions.
+    """
+    q = query.strip()
+    if not q:
+        return [query]
+
+    if not _looks_complex(q):
+        return [q]
+
+    lowered = q.lower().rstrip("?.! ")
+    tokens = [t.strip() for t in _LIST_ITEM_SPLIT_RE.split(lowered) if t.strip()]
+
+    aspects: list[str] = []
+    for tok in tokens:
+        for word in tok.split():
+            if word in _ASPECT_NOUNS and word not in aspects:
+                aspects.append(word)
+                break  # one aspect label per list item is enough
+
+    if len(aspects) < 2:
+        return [q]
+
+    aspects = aspects[:MAX_DECOMPOSED_SUB_QUERIES]
+    # Keep the full original question as context in every sub-query (paper
+    # names, "compare" framing, etc. all still matter for retrieval) while
+    # anchoring each one on a distinct aspect so dense/BM25 actually surface
+    # different top chunks per sub-query.
+    return [f"{aspect}: {q}" for aspect in aspects]
+
+
+# ---------------------------------------------------------------------------
 # LLM-backed transformation (Groq, same client as llm.py uses)
 # ---------------------------------------------------------------------------
 
@@ -116,14 +213,17 @@ def _call_groq_raw(prompt: str, max_tokens: int = MAX_ANSWER_TOKENS) -> str:
     from groq import Groq
     client = Groq(api_key=GROQ_API_KEY)
 
-    def _attempt(model: str) -> str:
+    def _attempt(model: str):
         resp = client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.0,
             max_tokens=max_tokens,
         )
-        return (resp.choices[0].message.content or "").strip()
+        text = (resp.choices[0].message.content or "").strip()
+        usage = resp.usage
+        usage_dict = {"prompt_tokens": usage.prompt_tokens, "completion_tokens": usage.completion_tokens} if usage else None
+        return text, usage_dict
 
     return with_model_fallback(_attempt)
 
@@ -244,6 +344,12 @@ def with_model_fallback(make_request):
     """
     Calls `make_request(model_name)` with GROQ_MODEL first.
 
+    `make_request` must return `(result, usage)` where `usage` is either
+    `None` or a dict with `prompt_tokens`/`completion_tokens` — this is how
+    _record_call() gets real token counts for observability (item 15)
+    without with_model_fallback needing to know anything about the Groq SDK
+    response shape itself.
+
     On a *temporary* failure only (see `_is_temporary_failure`), retries
     exactly once against GROQ_FALLBACK_MODEL. Never retries beyond that, and
     never falls back for auth/validation errors a different model can't fix.
@@ -256,8 +362,8 @@ def with_model_fallback(make_request):
     this is where the real, external call count is measured, not assumed.
     """
     try:
-        result = make_request(GROQ_MODEL)
-        _record_call(GROQ_MODEL, "primary", True)
+        result, usage = make_request(GROQ_MODEL)
+        _record_call(GROQ_MODEL, "primary", True, usage)
         return result
     except Exception as primary_error:
         _record_call(GROQ_MODEL, "primary", False)
@@ -266,8 +372,8 @@ def with_model_fallback(make_request):
         if not _is_temporary_failure(primary_error):
             raise
         try:
-            result = make_request(GROQ_FALLBACK_MODEL)
-            _record_call(GROQ_FALLBACK_MODEL, "fallback", True)
+            result, usage = make_request(GROQ_FALLBACK_MODEL)
+            _record_call(GROQ_FALLBACK_MODEL, "fallback", True, usage)
             return result
         except Exception:
             _record_call(GROQ_FALLBACK_MODEL, "fallback", False)

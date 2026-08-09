@@ -40,7 +40,15 @@ Thumbs.db
 
 # Logs
 *.log
+logs/
 
 # Temporary files
 *.tmp
 *.temp
+
+# Vendored/scratch source dumps and one-off diagnostic scripts should never
+# reappear here — see backend/ cleanup notes.
+backend/temp_chroma/
+
+# Registry / task DB (runtime state, not source)
+data/registry.db
