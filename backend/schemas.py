@@ -70,6 +70,22 @@ class StructuredFindings(BaseModel):
         return _coerce_to_str_list(v)
 
 
+class ClaimEvidence(BaseModel):
+    """One factual claim from the answer, traced back to its evidence
+    support level. Internal — the normal chat UI never renders this; it
+    only rides along on the SAME one-call structured-mode response so a
+    caller that explicitly wants claim-level tracing (e.g. a future
+    'show evidence trace' toggle) doesn't need a second LLM call to get it."""
+    claim: str
+    support: str = Field("NOT_FOUND", description="'DIRECTLY_STATED' | 'STRONGLY_SUPPORTED' | 'NOT_FOUND'")
+    document_ids: list[str] = Field(default_factory=list)
+
+    @field_validator("document_ids", mode="before")
+    @classmethod
+    def _coerce_document_ids(cls, v):
+        return _coerce_to_str_list(v)
+
+
 class StructuredAnswerJSON(BaseModel):
     """AnswerJSON's structured sibling — validated the same way, same
     citation-gating rule applies (citations only attach on real success)."""
@@ -78,11 +94,17 @@ class StructuredAnswerJSON(BaseModel):
     evidence_sufficient: bool = True
     document_ids: list[str] = Field(default_factory=list)
     structured: StructuredFindings
+    claims: list[ClaimEvidence] = Field(default_factory=list, description="Optional claim-level evidence trace; empty unless the model populated it.")
 
     @field_validator("document_ids", mode="before")
     @classmethod
     def _coerce_document_ids(cls, v):
         return _coerce_to_str_list(v)
+
+    @field_validator("claims", mode="before")
+    @classmethod
+    def _coerce_claims(cls, v):
+        return v if isinstance(v, list) else []
 
 
 # ---------------------------------------------------------------------------
@@ -163,6 +185,119 @@ class QuestionSetJSON(BaseModel):
         if isinstance(v, list):
             return v
         return []
+
+
+
+# ---------------------------------------------------------------------------
+# Paper Evaluation — one call, grounded critique. Each dimension must
+# distinguish DIRECTLY_STATED / STRONGLY_SUPPORTED / NOT_FOUND rather than
+# inventing an assessment when the evidence doesn't cover it.
+# ---------------------------------------------------------------------------
+
+class EvaluationDimension(BaseModel):
+    assessment: str = Field("", description="The actual evaluative judgment, or empty if NOT_FOUND.")
+    support: str = Field("NOT_FOUND", description="'DIRECTLY_STATED' | 'STRONGLY_SUPPORTED' | 'NOT_FOUND'")
+
+
+class PaperEvaluationJSON(BaseModel):
+    document_id: str = ""
+    title: str = ""  # display-only human-readable title, filled in by main.py from doc_titles — never the document_id
+    problem_clarity: EvaluationDimension = Field(default_factory=EvaluationDimension)
+    novelty: EvaluationDimension = Field(default_factory=EvaluationDimension)
+    methodology: EvaluationDimension = Field(default_factory=EvaluationDimension)
+    experimental_design: EvaluationDimension = Field(default_factory=EvaluationDimension)
+    results: EvaluationDimension = Field(default_factory=EvaluationDimension)
+    limitations: EvaluationDimension = Field(default_factory=EvaluationDimension)
+    reproducibility: EvaluationDimension = Field(default_factory=EvaluationDimension)
+    strengths: list[str] = Field(default_factory=list)
+    weaknesses: list[str] = Field(default_factory=list)
+    overall_assessment: str = ""
+    evidence_sufficient: bool = True
+
+    @field_validator("strengths", "weaknesses", mode="before")
+    @classmethod
+    def _coerce_lists(cls, v):
+        return _coerce_to_str_list(v)
+
+
+# ---------------------------------------------------------------------------
+# Research Gap Discovery — every gap must be labeled by provenance, never
+# presented as a flat undifferentiated list.
+# ---------------------------------------------------------------------------
+
+class ResearchGap(BaseModel):
+    gap: str
+    label: str = Field("POTENTIAL_INFERRED_GAP", description="'AUTHOR_STATED_GAP' | 'POTENTIAL_INFERRED_GAP'")
+    evidence: str = Field("", description="The stated limitation/future-work text, or the inference basis.")
+    document_id: str = ""
+
+
+class ResearchGapsJSON(BaseModel):
+    gaps: list[ResearchGap] = Field(default_factory=list)
+    evidence_sufficient: bool = True
+
+    @field_validator("gaps", mode="before")
+    @classmethod
+    def _coerce_gaps(cls, v):
+        return v if isinstance(v, list) else []
+
+
+# ---------------------------------------------------------------------------
+# Literature Matrix — one column per paper, every cell grounded ONLY in that
+# paper's own evidence (never borrowed cross-paper).
+# ---------------------------------------------------------------------------
+
+class LiteratureMatrixRow(BaseModel):
+    document_id: str
+    title: str = ""
+    problem: str = "Not available in uploaded evidence"
+    method: str = "Not available in uploaded evidence"
+    architecture: str = "Not available in uploaded evidence"
+    dataset: str = "Not available in uploaded evidence"
+    metrics: str = "Not available in uploaded evidence"
+    results: str = "Not available in uploaded evidence"
+    limitations: str = "Not available in uploaded evidence"
+    research_gap: str = "Not available in uploaded evidence"
+
+
+class LiteratureMatrixJSON(BaseModel):
+    rows: list[LiteratureMatrixRow] = Field(default_factory=list)
+    evidence_sufficient: bool = True
+
+    @field_validator("rows", mode="before")
+    @classmethod
+    def _coerce_rows(cls, v):
+        return v if isinstance(v, list) else []
+
+
+# ---------------------------------------------------------------------------
+# Knowledge Graph — nodes/edges tagged with the source document_id so
+# multi-paper graphs never blur which paper a fact came from.
+# ---------------------------------------------------------------------------
+
+class KGNode(BaseModel):
+    id: str
+    label: str
+    type: str = Field("concept", description="'paper' | 'method' | 'dataset' | 'result' | 'concept' | 'limitation'")
+    document_id: str = ""
+
+
+class KGEdge(BaseModel):
+    source: str
+    target: str
+    relation: str = ""
+    document_id: str = ""
+
+
+class KnowledgeGraphJSON(BaseModel):
+    nodes: list[KGNode] = Field(default_factory=list)
+    edges: list[KGEdge] = Field(default_factory=list)
+    evidence_sufficient: bool = True
+
+    @field_validator("nodes", "edges", mode="before")
+    @classmethod
+    def _coerce_list(cls, v):
+        return v if isinstance(v, list) else []
 
 
 class AnswerEvaluationJSON(BaseModel):

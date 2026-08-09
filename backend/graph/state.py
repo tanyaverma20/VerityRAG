@@ -48,6 +48,7 @@ class ResearchState(TypedDict):
     evidence_sufficient: bool      # self-reported by the ONE synthesis call (normal mode); no separate verifier call
     self_reported_document_ids: list[str]  # auxiliary signal only; citations stay evidence-derived, not model-derived
     structured_data: dict | None   # populated only when structured_mode was requested AND synthesis succeeded
+    claim_evidence_trace: list[dict]  # per-claim DIRECTLY_STATED/STRONGLY_SUPPORTED/NOT_FOUND tags; structured_mode only, never surfaced in the normal chat UI
     
     # 8. Verification Phase
     verification_results: list[dict]

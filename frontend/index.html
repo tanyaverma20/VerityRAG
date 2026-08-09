@@ -185,17 +185,51 @@
   .ws-switcher-item.active .wsi-name { color: var(--accent); }
   .ws-switcher-item .wsi-meta { font-size: 10.5px; color: var(--text-faint); margin-top: 1px; }
 
-  /* Compact controls row (Deep Research / Viva / Project Interview / Mock
-     Test / Explain Figure) + the inline setup bar some of them open. */
-  .controls-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
-  .control-pill {
-    display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border);
-    background: var(--surface-solid); color: var(--text-muted); padding: 6px 11px; border-radius: 999px;
-    font-size: 12px; font-weight: 600; cursor: pointer;
+  /* All research actions (Deep Research / Viva / Project Interview / Mock
+     Test / Explain Figure / Evaluate Paper / Find Research Gaps /
+     Literature Matrix / Knowledge Graph / Compare / Eval Dashboard) live in
+     one "+" menu next to the composer instead of a row of standalone
+     buttons — same actions, same handlers, just consolidated presentation.
+     The inline setup bar some of them open (difficulty/count/figure-ref)
+     is unchanged, see .analysis-bar below. */
+  .plus-wrap { position: relative; flex-shrink: 0; }
+  .plus-btn {
+    width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--border);
+    background: var(--surface-solid); color: var(--text-muted); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
     transition: border-color .15s var(--ease), color .15s var(--ease), background .15s var(--ease);
   }
-  .control-pill:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
-  .control-pill.active { border-color: var(--accent); color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+  .plus-btn:hover, .plus-btn.open { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .plus-btn.deep-active::after {
+    content: ''; position: absolute; top: 3px; right: 3px; width: 8px; height: 8px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2)); border: 2px solid var(--surface-solid);
+  }
+
+  .plus-menu {
+    position: absolute; bottom: calc(100% + 10px); left: 0; width: 268px; max-width: calc(100vw - 56px);
+    max-height: min(70vh, 480px); overflow-y: auto; background: var(--surface-solid); border: 1px solid var(--border);
+    border-radius: var(--radius-md); box-shadow: var(--shadow-md); padding: 8px; z-index: 40;
+  }
+  .plus-menu-group { padding: 6px 4px; }
+  .plus-menu-group + .plus-menu-group { border-top: 1px solid var(--border); margin-top: 2px; }
+  .plus-menu-title {
+    font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--text-faint); padding: 4px 8px 6px;
+  }
+  .plus-menu-item {
+    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: none; background: none;
+    color: var(--text); padding: 8px 8px; border-radius: var(--radius-sm); font-size: 13.5px; font-weight: 600;
+    cursor: pointer; transition: background .12s var(--ease);
+  }
+  .plus-menu-item .icon { color: var(--text-faint); flex-shrink: 0; }
+  .plus-menu-item:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
+  .plus-menu-item:hover:not(:disabled) .icon { color: var(--accent); }
+  .plus-menu-item:disabled { opacity: .45; cursor: not-allowed; }
+  .plus-menu-item.active { color: var(--accent); }
+  .plus-menu-item .pm-check { margin-left: auto; color: var(--accent); flex-shrink: 0; }
+  @media (max-width: 480px) {
+    .plus-menu { left: -8px; width: min(280px, calc(100vw - 32px)); }
+  }
 
   .analysis-bar {
     border: 1px solid var(--border); background: var(--surface); backdrop-filter: blur(10px);
@@ -250,6 +284,12 @@
   .eval-badge.partially_correct { background: var(--amber-soft); color: var(--amber); }
   .eval-badge.incorrect { background: var(--danger-soft); color: var(--danger); }
   .eval-badge.unclear { background: var(--surface-2); color: var(--text-faint); border: 1px solid var(--border); }
+
+  /* Evidence-support badges — Evaluate Paper / Research Gaps (DIRECTLY_STATED /
+     STRONGLY_SUPPORTED / NOT_FOUND), same three-way distinction throughout. */
+  .support-directly_stated { background: var(--success-soft); color: var(--success); }
+  .support-strongly_supported { background: var(--amber-soft); color: var(--amber); }
+  .support-not_found { background: var(--surface-2); color: var(--text-faint); border: 1px solid var(--border); }
 
   /* "Why this answer?" compact flow diagram */
   .why-flow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 11px; color: var(--text-muted); margin-top: 6px; }
@@ -517,14 +557,6 @@
   .footnote { text-align: center; font-size: 11px; color: var(--text-faint); margin-top: 11px; }
 
   /* ---------------- Report / Compare card ---------------- */
-  .toolbar-row { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
-  .report-btn {
-    display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--accent);
-    background: var(--accent-soft); color: var(--accent); padding: 7px 14px; border-radius: 999px;
-    font-size: 12.5px; font-weight: 700; cursor: pointer; transition: background .18s var(--ease), color .18s var(--ease);
-  }
-  .report-btn:hover:not(:disabled) { background: var(--accent); color: #fff; }
-  .report-btn:disabled { opacity: .5; cursor: not-allowed; }
 
   .msg-row.report .bubble { max-width: 94%; width: 94%; }
   .report-card .report-title { font-size: 17px; font-weight: 800; margin: 0 0 6px; font-family: var(--font-display); }
@@ -677,12 +709,7 @@
 
     <div class="composer" id="composer">
     <div class="composer-inner">
-      <div class="controls-row" id="controlsRow"></div>
       <div class="analysis-bar" id="analysisBar" style="display:none;"></div>
-      <div class="toolbar-row" id="reportToolbar">
-        <button class="report-btn" id="reportBtn" onclick="generateReport()">Generate Report</button>
-        <button class="report-btn" onclick="openEvalDashboard()"></button>
-      </div>
       <div class="suggestions" id="suggestions">
         <button class="chip" onclick="useSuggestion('Summarize this paper.')">Summarize</button>
         <button class="chip" onclick="useSuggestion('Compare the methodologies of these papers.')">Compare methodologies</button>
@@ -690,6 +717,10 @@
         <button class="chip" onclick="useSuggestion('What datasets were used?')">Datasets used</button>
       </div>
       <div class="input-shell">
+        <div class="plus-wrap" id="plusWrap">
+          <button class="plus-btn" id="plusBtn" onclick="togglePlusMenu(event)" title="Research actions"></button>
+          <div class="plus-menu" id="plusMenu" style="display:none;"></div>
+        </div>
         <textarea id="question" rows="1" placeholder="Ask anything about your papers..." onkeydown="onQuestionKeydown(event)" oninput="autoGrow(this)"></textarea>
         <input type="checkbox" id="deepResearchToggle" style="display:none;">
         <button class="send-btn" id="sendBtn" onclick="sendQuestion()" title="Send"></button>
@@ -1147,6 +1178,14 @@ function reconstructMessage(m) {
       return { role: "interview_eval", correctness: meta.correctness, missing_points: meta.missing_points, technical_depth: meta.technical_depth, suggested_answer: meta.suggested_answer };
     case "report":
       return { role: "report", report: meta.report };
+    case "evaluate_paper":
+      return { role: "evaluate_paper", evaluation: meta.evaluation };
+    case "research_gaps":
+      return { role: "research_gaps", gaps: meta.gaps || [], evidence_sufficient: meta.evidence_sufficient, document_titles: meta.document_titles || {} };
+    case "literature_matrix":
+      return { role: "literature_matrix", rows: meta.rows || [], evidence_sufficient: meta.evidence_sufficient };
+    case "knowledge_graph":
+      return { role: "knowledge_graph", nodes: meta.nodes || [], edges: meta.edges || [], evidence_sufficient: meta.evidence_sufficient, document_titles: meta.document_titles || {} };
     default:
       // Normal Q&A answer — unchanged from the original behavior.
       return { role: "assistant", text: m.content, sources: dedupeSources(meta.structured_citations || meta.sources || []) };
@@ -1380,10 +1419,11 @@ function resolveQueryScope(question, forceDocIds) {
 }
 
 function updateReportButton() {
-  const readyCount = papers.filter(p => p.status === "ready").length;
-  const btn = document.getElementById("reportBtn");
-  btn.innerHTML = icon('file', 13) + (readyCount > 1 ? " Generate Comparative Report" : " Generate Report");
-  btn.disabled = readyCount === 0 || sending || reportGenerating;
+  // The report action now lives inside the "+" menu (see renderControlsRow,
+  // which computes the same label/disabled logic live from papers/sending/
+  // reportGenerating each time the menu is opened) — kept as a thin alias so
+  // every existing call site keeps working unchanged.
+  renderControlsRow();
 }
 
 // ---------------------------------------------------------------------------
@@ -1606,6 +1646,14 @@ function renderChat() {
       bubble.appendChild(body);
     } else if (m.role === "interview_eval") {
       bubble.appendChild(renderInterviewEvalCard(m));
+    } else if (m.role === "evaluate_paper") {
+      bubble.appendChild(renderPaperEvaluationCard(m.evaluation));
+    } else if (m.role === "research_gaps") {
+      bubble.appendChild(renderResearchGapsCard(m));
+    } else if (m.role === "literature_matrix") {
+      bubble.appendChild(renderLiteratureMatrixCard(m));
+    } else if (m.role === "knowledge_graph") {
+      bubble.appendChild(renderKnowledgeGraphCard(m));
     } else {
       const head = document.createElement("div");
       head.className = "answer-card-head";
@@ -1739,6 +1787,141 @@ function renderInterviewEvalCard(m) {
   return wrap;
 }
 
+// Evidence-support badge shared by Evaluate Paper's per-dimension labels —
+// DIRECTLY_STATED / STRONGLY_SUPPORTED / NOT_FOUND, the same three-way
+// distinction the internal evidence-tracing pipeline uses everywhere.
+function supportBadge(support) {
+  const map = { DIRECTLY_STATED: "Directly stated", STRONGLY_SUPPORTED: "Strongly supported", NOT_FOUND: "Not found in evidence" };
+  return `<span class="src-pill support-${(support || "NOT_FOUND").toLowerCase()}">${escapeHtml(map[support] || support || "")}</span>`;
+}
+
+const EVAL_DIMENSIONS = [
+  ["problem_clarity", "Problem Clarity"], ["novelty", "Novelty"], ["methodology", "Methodology"],
+  ["experimental_design", "Experimental Design"], ["results", "Results"], ["limitations", "Limitations"],
+  ["reproducibility", "Reproducibility"],
+];
+
+function renderPaperEvaluationCard(ev) {
+  const wrap = document.createElement("div");
+  const head = document.createElement("div");
+  head.className = "answer-card-head";
+  // Human-readable title only (resolved server-side from the filename —
+  // see doc_titles.py); document_id itself never reaches the UI.
+  head.innerHTML = `<span class="kicker">${icon('check', 12)} Paper Evaluation</span>${ev && ev.title ? `<span class="src-pill">${escapeHtml(ev.title)}</span>` : ''}`;
+  wrap.appendChild(head);
+  if (!ev) { wrap.appendChild(document.createTextNode(GENERIC_ERROR)); return wrap; }
+
+  let html = `<div class="eval-card">`;
+  EVAL_DIMENSIONS.forEach(([key, label]) => {
+    const d = ev[key] || {};
+    html += `<div class="ec-row"><span class="ec-label">${label}: </span>${d.assessment ? escapeHtml(d.assessment) : '<em>Not available in uploaded evidence</em>'} ${supportBadge(d.support)}</div>`;
+  });
+  html += `</div>`;
+  if ((ev.strengths || []).length) html += `<div class="field-label">Strengths</div><ul>${ev.strengths.map(s => `<li>${escapeHtml(s)}</li>`).join("")}</ul>`;
+  if ((ev.weaknesses || []).length) html += `<div class="field-label">Weaknesses</div><ul>${ev.weaknesses.map(s => `<li>${escapeHtml(s)}</li>`).join("")}</ul>`;
+  if (ev.overall_assessment) html += `<div class="field-label">Overall Assessment</div><p>${escapeHtml(ev.overall_assessment)}</p>`;
+  if (!ev.evidence_sufficient) html += `<div class="not-covered">Note: the uploaded evidence was thin — some dimensions may be marked not found.</div>`;
+
+  const body = document.createElement("div");
+  body.innerHTML = html;
+  wrap.appendChild(body);
+  return wrap;
+}
+
+function renderResearchGapsCard(m) {
+  const wrap = document.createElement("div");
+  const head = document.createElement("div");
+  head.className = "answer-card-head";
+  head.innerHTML = `<span class="kicker">${icon('alert', 12)} Research Gaps</span><span class="src-pill">${(m.gaps || []).length} found</span>`;
+  wrap.appendChild(head);
+
+  const gaps = m.gaps || [];
+  const titles = m.document_titles || {};
+  let html = gaps.length ? `<ul class="qset" style="list-style:none;padding:0;">` : `<p>${GENERIC_ERROR}</p>`;
+  gaps.forEach(g => {
+    const labelText = g.label === "AUTHOR_STATED_GAP" ? "Author-stated gap" : "Potential inferred gap";
+    // Human-readable title only (resolved server-side) — never the raw document_id.
+    const docLabel = titles[g.document_id];
+    html += `<div class="qcard"><div class="qc-head"><span class="qc-text">${escapeHtml(g.gap)}</span></div>
+      <div class="qc-meta"><span class="src-pill support-${g.label === 'AUTHOR_STATED_GAP' ? 'directly_stated' : 'strongly_supported'}">${escapeHtml(labelText)}</span>${docLabel ? ` · ${escapeHtml(docLabel)}` : ''}</div>
+      ${g.evidence ? `<div class="src-text">"${escapeHtml(g.evidence)}"</div>` : ''}</div>`;
+  });
+  if (gaps.length) html += `</ul>`;
+  if (!m.evidence_sufficient) html += `<div class="not-covered">Note: the uploaded evidence was thin — gap coverage may be incomplete.</div>`;
+
+  const body = document.createElement("div");
+  body.innerHTML = html;
+  wrap.appendChild(body);
+  return wrap;
+}
+
+const LIT_MATRIX_ROWS = [
+  ["problem", "Problem"], ["method", "Method"], ["architecture", "Architecture"], ["dataset", "Dataset"],
+  ["metrics", "Metrics"], ["results", "Results"], ["limitations", "Limitations"], ["research_gap", "Research Gap"],
+];
+
+function renderLiteratureMatrixCard(m) {
+  const wrap = document.createElement("div");
+  const head = document.createElement("div");
+  head.className = "answer-card-head";
+  head.innerHTML = `<span class="kicker">${icon('columns', 12)} Literature Matrix</span>`;
+  wrap.appendChild(head);
+
+  const rows = m.rows || [];
+  if (!rows.length) { wrap.appendChild(document.createTextNode(GENERIC_ERROR)); return wrap; }
+
+  // r.title is always populated server-side (filename first, then the
+  // model's own title from this same call — see doc_titles.py); the
+  // "Untitled Document" fallback here is defensive only, never document_id.
+  let html = `<div class="compare-table-wrap"><table class="compare-table"><thead><tr><th></th>${
+    rows.map(r => `<th class="col-title">${escapeHtml(r.title || 'Untitled Document')}</th>`).join("")
+  }</tr></thead><tbody>`;
+  LIT_MATRIX_ROWS.forEach(([key, label]) => {
+    html += `<tr><td class="row-label">${label}</td>${rows.map(r => `<td>${escapeHtml(r[key] || UNAVAILABLE)}</td>`).join("")}</tr>`;
+  });
+  html += `</tbody></table></div>`;
+  if (!m.evidence_sufficient) html += `<div class="not-covered">Note: the uploaded evidence did not fully cover every paper — some cells may be marked not available.</div>`;
+
+  const body = document.createElement("div");
+  body.innerHTML = html;
+  wrap.appendChild(body);
+  return wrap;
+}
+
+const KG_TYPE_LABEL = { paper: "Paper", method: "Method", dataset: "Dataset", result: "Result", concept: "Concept", limitation: "Limitation" };
+
+function renderKnowledgeGraphCard(m) {
+  const wrap = document.createElement("div");
+  const head = document.createElement("div");
+  head.className = "answer-card-head";
+  head.innerHTML = `<span class="kicker">${icon('layers', 12)} Knowledge Graph</span><span class="src-pill">${(m.nodes || []).length} nodes · ${(m.edges || []).length} edges</span>`;
+  wrap.appendChild(head);
+
+  const nodes = m.nodes || [];
+  const edges = m.edges || [];
+  const kgTitles = m.document_titles || {};
+  if (!nodes.length) { wrap.appendChild(document.createTextNode(GENERIC_ERROR)); return wrap; }
+  const nodeById = Object.fromEntries(nodes.map(n => [n.id, n]));
+
+  // Human-readable title only (resolved server-side) — never the raw document_id.
+  let html = `<div class="field-label">Nodes</div><ul>` + nodes.map(n => {
+    const docLabel = kgTitles[n.document_id];
+    return `<li>${escapeHtml(n.label)} <span class="src-pill">${escapeHtml(KG_TYPE_LABEL[n.type] || n.type)}</span>${docLabel ? ` <span class="src-pill">${escapeHtml(docLabel)}</span>` : ''}</li>`;
+  }).join("") + `</ul>`;
+  if (edges.length) {
+    html += `<div class="field-label">Relationships</div><ul>` + edges.map(e => {
+      const s = nodeById[e.source], t = nodeById[e.target];
+      return `<li>${escapeHtml(s ? s.label : e.source)} → <em>${escapeHtml(e.relation || "relates to")}</em> → ${escapeHtml(t ? t.label : e.target)}</li>`;
+    }).join("") + `</ul>`;
+  }
+  if (!m.evidence_sufficient) html += `<div class="not-covered">Note: the uploaded evidence was thin — the graph may be incomplete.</div>`;
+
+  const body = document.createElement("div");
+  body.innerHTML = html;
+  wrap.appendChild(body);
+  return wrap;
+}
+
 // ---------------------------------------------------------------------------
 // Ask a question
 // ---------------------------------------------------------------------------
@@ -1863,25 +2046,82 @@ function summarizeDocument(documentId) {
 }
 
 // ---------------------------------------------------------------------------
-// Compact controls row: Deep Research | Viva | Project Interview | Mock Test
-// | Explain Figure. Each PDF-grounded mode reuses resolveQueryScope() for
-// document scoping (same deterministic rules as normal chat) and costs
-// exactly one /analyze call (one Groq call server-side). Deep Research is a
-// plain toggle sharing the same hidden checkbox sendQuestion() already reads.
+// All research actions (Deep Research / Viva / Project Interview / Mock Test
+// / Explain Figure / Evaluate Paper / Find Research Gaps / Literature Matrix
+// / Knowledge Graph / Compare / Eval Dashboard), consolidated into one "+"
+// menu next to the composer — UI-only consolidation of controls that used to
+// be a standalone button row; every handler below is unchanged, only how
+// it's reached moved. Each PDF-grounded mode still reuses resolveQueryScope()
+// for document scoping and costs exactly one /analyze call (one Groq call
+// server-side). Deep Research is still the same plain toggle sharing the
+// same hidden checkbox sendQuestion() already reads.
 // ---------------------------------------------------------------------------
 function renderControlsRow() {
-  const el = document.getElementById("controlsRow");
+  // Kept as a function of this name (not renamed) because it's called from
+  // many existing sites (openAnalysisBar, closeAnalysisBar, upload/report
+  // flows, init) that only need "the action menu's dynamic state is fresh" —
+  // rebuilding the (possibly hidden) menu content is cheap and avoids
+  // touching every call site for a presentation-only change.
+  const menu = document.getElementById("plusMenu");
+  const plusBtn = document.getElementById("plusBtn");
+  if (!menu || !plusBtn) return;
+
   const isDeep = document.getElementById("deepResearchToggle").checked;
-  const pills = [
-    { key: "deep", label: "Deep Research", icon: "flask", active: isDeep, onclick: "toggleDeepResearchPill()" },
-    { key: "viva", label: "Viva", icon: "helpCircle", active: activeAnalysisMode === "viva", onclick: "openAnalysisBar('viva')" },
-    { key: "project_interview", label: "Project Interview", icon: "award", active: false, onclick: "openInterviewSetup('project_interview')" },
-    { key: "mock_test", label: "Mock Test", icon: "clipboard", active: activeAnalysisMode === "mock_test", onclick: "openAnalysisBar('mock_test')" },
-    { key: "explain_figure", label: "Explain Figure", icon: "image", active: activeAnalysisMode === "explain_figure", onclick: "openAnalysisBar('explain_figure')" },
+  const readyCount = papers.filter(p => p.status === "ready").length;
+  const reportDisabled = readyCount === 0 || sending || reportGenerating;
+  const reportLabel = readyCount > 1 ? "Generate Comparative Report" : "Generate Report";
+
+  plusBtn.classList.toggle("deep-active", isDeep);
+
+  const groups = [
+    { title: "Research", items: [
+      { label: isDeep ? "Deep Research" : "Deep Research", icon: "flask", active: isDeep, onclick: "toggleDeepResearchPill()" },
+      { label: "Explain Figure", icon: "image", active: activeAnalysisMode === "explain_figure", onclick: "openAnalysisBar('explain_figure')" },
+      { label: "Evaluate Paper", icon: "check", onclick: "runEvaluatePaper()" },
+      { label: "Find Research Gaps", icon: "alert", onclick: "runResearchGaps()" },
+    ] },
+    { title: "Learning & Interview", items: [
+      { label: "Viva", icon: "helpCircle", active: activeAnalysisMode === "viva", onclick: "openAnalysisBar('viva')" },
+      { label: "Project Interview", icon: "award", onclick: "openInterviewSetup('project_interview')" },
+      { label: "Mock Test", icon: "clipboard", active: activeAnalysisMode === "mock_test", onclick: "openAnalysisBar('mock_test')" },
+    ] },
+    { title: "Analysis", items: [
+      { label: reportLabel, icon: "file", disabled: reportDisabled, onclick: "generateReport()" },
+      { label: "Literature Matrix", icon: "columns", onclick: "runLiteratureMatrix()" },
+      { label: "Knowledge Graph", icon: "layers", onclick: "runKnowledgeGraph()" },
+    ] },
+    { title: "Evaluation", items: [
+      { label: "Eval Dashboard", icon: "barChart", onclick: "openEvalDashboard()" },
+    ] },
   ];
-  el.innerHTML = pills.map(p => `
-    <button class="control-pill ${p.active ? 'active' : ''}" onclick="${p.onclick}">${icon(p.icon, 13)}<span>${p.label}</span></button>
+
+  menu.innerHTML = groups.map(g => `
+    <div class="plus-menu-group">
+      <div class="plus-menu-title">${g.title}</div>
+      ${g.items.map(it => `
+        <button class="plus-menu-item ${it.active ? 'active' : ''}" ${it.disabled ? 'disabled' : ''} onclick="${it.onclick}; closePlusMenu();">
+          ${icon(it.icon, 15)}<span>${it.label}</span>${it.active ? `<span class="pm-check">${icon('check', 13)}</span>` : ''}
+        </button>
+      `).join("")}
+    </div>
   `).join("");
+}
+
+function togglePlusMenu(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById("plusMenu");
+  const isOpen = menu.style.display === "block";
+  if (isOpen) { closePlusMenu(); return; }
+  renderControlsRow();
+  menu.style.display = "block";
+  document.getElementById("plusBtn").classList.add("open");
+}
+
+function closePlusMenu() {
+  const menu = document.getElementById("plusMenu");
+  if (menu) menu.style.display = "none";
+  const btn = document.getElementById("plusBtn");
+  if (btn) btn.classList.remove("open");
 }
 
 function toggleDeepResearchPill() {
@@ -2023,6 +2263,126 @@ async function runExplainFigure(figureRefFromChat) {
     setSending(false);
     saveUiCache();
     renderChat(); renderSidebar();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Evaluate Paper / Find Research Gaps / Literature Matrix / Knowledge Graph
+// — one-click actions (no setup bar), same universal scope resolver, exactly
+// one /analyze call each, persisted into the active conversation the same
+// way as every other analysis mode (session_id -> server-side add_message).
+// ---------------------------------------------------------------------------
+async function runEvaluatePaper() {
+  if (analysisRunning) return;
+  const scopedDocIds = resolveQueryScope("", null);
+  if (!scopedDocIds.length) { alert("Upload at least one paper first."); return; }
+
+  let conv = getActiveConversation();
+  if (!conv) conv = await createConversation();
+
+  analysisRunning = true;
+  const pendingMsg = { role: "evaluate_paper", pending: true };
+  conv.messages.push(pendingMsg);
+  ensureConversationTitle(conv, "Evaluate paper");
+  conv.updatedAt = Date.now();
+  renderChat(); renderSidebar();
+
+  try {
+    const data = await analyzeRequest({ mode: "evaluate_paper", document_ids: scopedDocIds, workspace_id: activeWorkspaceId, session_id: conv.sessionId || null });
+    pendingMsg.pending = false;
+    if (!data.ok) { pendingMsg.role = "assistant"; pendingMsg.text = data.error || GENERIC_ERROR; }
+    else { pendingMsg.evaluation = data.evaluation; }
+  } catch (err) {
+    pendingMsg.pending = false; pendingMsg.role = "assistant"; pendingMsg.text = friendlyError(err);
+  } finally {
+    analysisRunning = false;
+    saveUiCache(); renderChat(); renderSidebar();
+  }
+}
+
+async function runResearchGaps() {
+  if (analysisRunning) return;
+  const scopedDocIds = resolveQueryScope("", null);
+  if (!scopedDocIds.length) { alert("Upload at least one paper first."); return; }
+
+  let conv = getActiveConversation();
+  if (!conv) conv = await createConversation();
+
+  analysisRunning = true;
+  const pendingMsg = { role: "research_gaps", pending: true };
+  conv.messages.push(pendingMsg);
+  ensureConversationTitle(conv, "Research gaps");
+  conv.updatedAt = Date.now();
+  renderChat(); renderSidebar();
+
+  try {
+    const data = await analyzeRequest({ mode: "research_gaps", document_ids: scopedDocIds, workspace_id: activeWorkspaceId, session_id: conv.sessionId || null });
+    pendingMsg.pending = false;
+    if (!data.ok) { pendingMsg.role = "assistant"; pendingMsg.text = data.error || GENERIC_ERROR; }
+    else { pendingMsg.gaps = data.gaps; pendingMsg.evidence_sufficient = data.evidence_sufficient; pendingMsg.document_titles = data.document_titles || {}; }
+  } catch (err) {
+    pendingMsg.pending = false; pendingMsg.role = "assistant"; pendingMsg.text = friendlyError(err);
+  } finally {
+    analysisRunning = false;
+    saveUiCache(); renderChat(); renderSidebar();
+  }
+}
+
+async function runLiteratureMatrix() {
+  if (analysisRunning) return;
+  const readyPapers = papers.filter(p => p.status === "ready");
+  if (readyPapers.length < 2) { alert("Upload at least two papers to build a literature matrix."); return; }
+  let scopedDocIds = resolveQueryScope("", null);
+  if (scopedDocIds.length < 2) scopedDocIds = readyPapers.map(p => p.document_id);
+
+  let conv = getActiveConversation();
+  if (!conv) conv = await createConversation();
+
+  analysisRunning = true;
+  const pendingMsg = { role: "literature_matrix", pending: true };
+  conv.messages.push(pendingMsg);
+  ensureConversationTitle(conv, "Literature matrix");
+  conv.updatedAt = Date.now();
+  renderChat(); renderSidebar();
+
+  try {
+    const data = await analyzeRequest({ mode: "literature_matrix", document_ids: scopedDocIds, workspace_id: activeWorkspaceId, session_id: conv.sessionId || null });
+    pendingMsg.pending = false;
+    if (!data.ok) { pendingMsg.role = "assistant"; pendingMsg.text = data.error || GENERIC_ERROR; }
+    else { pendingMsg.rows = data.rows; pendingMsg.evidence_sufficient = data.evidence_sufficient; }
+  } catch (err) {
+    pendingMsg.pending = false; pendingMsg.role = "assistant"; pendingMsg.text = friendlyError(err);
+  } finally {
+    analysisRunning = false;
+    saveUiCache(); renderChat(); renderSidebar();
+  }
+}
+
+async function runKnowledgeGraph() {
+  if (analysisRunning) return;
+  const scopedDocIds = resolveQueryScope("", null);
+  if (!scopedDocIds.length) { alert("Upload at least one paper first."); return; }
+
+  let conv = getActiveConversation();
+  if (!conv) conv = await createConversation();
+
+  analysisRunning = true;
+  const pendingMsg = { role: "knowledge_graph", pending: true };
+  conv.messages.push(pendingMsg);
+  ensureConversationTitle(conv, "Knowledge graph");
+  conv.updatedAt = Date.now();
+  renderChat(); renderSidebar();
+
+  try {
+    const data = await analyzeRequest({ mode: "knowledge_graph", document_ids: scopedDocIds, workspace_id: activeWorkspaceId, session_id: conv.sessionId || null });
+    pendingMsg.pending = false;
+    if (!data.ok) { pendingMsg.role = "assistant"; pendingMsg.text = data.error || GENERIC_ERROR; }
+    else { pendingMsg.nodes = data.nodes; pendingMsg.edges = data.edges; pendingMsg.evidence_sufficient = data.evidence_sufficient; pendingMsg.document_titles = data.document_titles || {}; }
+  } catch (err) {
+    pendingMsg.pending = false; pendingMsg.role = "assistant"; pendingMsg.text = friendlyError(err);
+  } finally {
+    analysisRunning = false;
+    saveUiCache(); renderChat(); renderSidebar();
   }
 }
 
@@ -2332,7 +2692,10 @@ function renderReportCard(report) {
 
   (report.papers || []).forEach(p => {
     const UNAVAILABLE = "Not available in the uploaded evidence";
-    html += `<h4>${escapeHtml(p.title || p.document_id)}</h4>`;
+    // p.title is always populated server-side (filename first, then the
+    // model's own title — see doc_titles.py); fallback here is defensive
+    // only, never document_id.
+    html += `<h4>${escapeHtml(p.title || 'Untitled Document')}</h4>`;
     [["overview", "Overview"], ["main_contribution", "Main Contribution"], ["methodology", "Methodology"], ["architecture", "Architecture"]]
       .forEach(([key, label]) => {
         html += `<div class="field-label">${label}</div><p>${escapeHtml(p[key] || UNAVAILABLE)}</p>`;
@@ -2516,7 +2879,7 @@ function renderCompareView() {
   const report = compareReport;
   const ps = report.papers || [];
   html += `<div class="compare-table-wrap"><table class="compare-table"><thead><tr><th></th>${
-    ps.map(p => `<th class="col-title">${escapeHtml(p.title || p.document_id)}</th>`).join("")
+    ps.map(p => `<th class="col-title">${escapeHtml(p.title || 'Untitled Document')}</th>`).join("")
   }</tr></thead><tbody>`;
   COMPARE_ROWS.forEach(([key, label]) => {
     html += `<tr><td class="row-label">${label}</td>`;
@@ -2673,8 +3036,15 @@ function toggleSidebar(force) {
 // ---------------------------------------------------------------------------
 async function init() {
   document.getElementById("sendBtn").innerHTML = icon('send', 16);
+  document.getElementById("plusBtn").innerHTML = icon('plus', 18);
   document.querySelector(".sidebar-toggle").innerHTML = icon('menu', 17);
-  document.querySelector('#reportToolbar button[onclick="openEvalDashboard()"]').innerHTML = icon('barChart', 13) + " Eval Dashboard";
+  // Click-outside / Escape closes the "+" menu (it's the only floating
+  // dropdown in the composer, so a single document-level listener is enough).
+  document.addEventListener("click", e => {
+    const wrap = document.getElementById("plusWrap");
+    if (wrap && !wrap.contains(e.target)) closePlusMenu();
+  });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closePlusMenu(); });
 
   setupDropzone("uploadPdfsBtn", files => files.forEach(uploadOne));
   setupDropzone("modalDropzone", files => { pendingWorkspaceFiles.push(...files); renderModalFileList(); });

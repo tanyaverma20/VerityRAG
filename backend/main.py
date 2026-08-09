@@ -16,7 +16,9 @@ from query_transform import decompose_query_deterministic
 from analysis import (
     generate_pdf_questions, explain_figure, recommend_from_comparison,
     answer_design_question, start_project_interview, evaluate_interview_answer,
+    evaluate_paper, find_research_gaps, build_literature_matrix, build_knowledge_graph,
 )
+from doc_titles import resolve_display_title
 from verify import verify_answer
 from llm import call_llm
 from database import (
@@ -703,6 +705,10 @@ def query(request: QueryRequest):
         # requested AND synthesis succeeded. Never shown in the plain
         # conversational bubble unless the caller asked for it.
         "structured": final_state.get("structured_data"),
+        # Same gating as "structured" above: only non-empty when
+        # mode="structured" was requested AND synthesis succeeded. Internal
+        # claim-level evidence trace — the normal chat UI never renders this.
+        "claim_evidence_trace": final_state.get("claim_evidence_trace", []),
         "verification": final_state.get("verification_results", []),
         "research_type": final_state.get("research_type", request.research_type),
         "research_iterations": final_state.get("research_iterations", 1),
@@ -868,7 +874,10 @@ def api_get_report_docx(report_id: str):
 # ONE Groq call via analysis.py, Pydantic-validated. No verifier call, no
 # extra generation pass.
 
-_PDF_GROUNDED_ANALYSIS_MODES = {"viva", "mock_test", "explain_figure", "recommend", "project_interview_start", "project_interview_evaluate"}
+_PDF_GROUNDED_ANALYSIS_MODES = {
+    "viva", "mock_test", "explain_figure", "recommend", "project_interview_start", "project_interview_evaluate",
+    "evaluate_paper", "research_gaps", "literature_matrix", "knowledge_graph",
+}
 # "Why This Design?" / "System Design" are explicitly about VerityRAG's OWN
 # architecture, not the uploaded paper — the only two modes still grounded
 # in analysis.REAL_ARCHITECTURE_CONTEXT instead of retrieval.
@@ -931,6 +940,14 @@ def api_analyze(req: AnalyzeRequest):
                 return {"ok": False, "mode": req.mode, "error": GENERATION_FAILED_MESSAGE}
             log_query_event(query="[analyze:explain_figure]", documents_searched=active_document_count, documents_contributing=len(documents_found), selected_evidence_count=len(chunks), total_latency_s=round(time.time() - start, 3), task_status="OK", **_call_observability_fields(request_id, active_document_count))
             answer = result.answer if result.evidence_sufficient else INSUFFICIENT_EVIDENCE_MESSAGE
+            if result.evidence_sufficient:
+                # Deterministic honesty caveat — appended regardless of what
+                # the model itself said, so this is never dependent on prompt
+                # compliance. PDF parsing (ingest.py) extracts TEXT only (no
+                # page-image rendering or vision model call exists in this
+                # pipeline), so the explanation is always caption/text-based,
+                # never a genuine visual reading of the figure.
+                answer = f"{answer}\n\n(Note: based on the paper's extracted caption/surrounding text, not a direct visual reading of the image.)"
             user_text = f"Explain: {ref}" if ref else "Explain this figure."
             _persist_analysis_turn(req.session_id, user_text, "assistant_kicker", answer, {"kicker": "Figure Explanation"})
             return {
@@ -959,6 +976,99 @@ def api_analyze(req: AnalyzeRequest):
                 "grounded": result.grounded, "evidence_sufficient": result.evidence_sufficient,
                 "documents_used": [d["document_id"] for d in documents_found],
             }
+
+        if req.mode == "evaluate_paper":
+            # Single-paper critique — if more than one document is scoped,
+            # evaluate the first one only (same "pick the primary paper"
+            # convention as explain_figure's single-document expectation);
+            # the frontend only offers this pill when exactly one paper is
+            # selected/referenced.
+            eval_doc_id = target_document_ids[0]
+            query_text = "problem statement, novelty, methodology, experimental design, results, limitations, reproducibility"
+            top_k = min(15, REPORT_CHUNKS_PER_DOC * max(len(target_document_ids), 1))
+            chunks = _retrieve_for_analysis(query_text, [eval_doc_id], top_k)
+            if not chunks:
+                return {"ok": False, "mode": req.mode, "error": INSUFFICIENT_EVIDENCE_MESSAGE}
+            evidence_text = _evidence_text_from_chunks(chunks)
+            result = evaluate_paper(evidence_text, eval_doc_id)
+            documents_found = get_contributing_documents(chunks)
+            if result is None:
+                log_query_event(query="[analyze:evaluate_paper]", documents_searched=active_document_count, total_latency_s=round(time.time() - start, 3), task_status="FAILED", **_call_observability_fields(request_id, active_document_count))
+                return {"ok": False, "mode": req.mode, "error": GENERATION_FAILED_MESSAGE}
+            log_query_event(query="[analyze:evaluate_paper]", documents_searched=active_document_count, documents_contributing=len(documents_found), selected_evidence_count=len(chunks), total_latency_s=round(time.time() - start, 3), task_status="OK", **_call_observability_fields(request_id, active_document_count))
+            payload = result.model_dump()
+            # Display-only: human-readable title, never the raw document_id
+            # — resolved deterministically from the filename (see doc_titles.py).
+            eval_filename = next((d["source"] for d in documents_found if d["document_id"] == eval_doc_id), None)
+            payload["title"] = resolve_display_title(eval_doc_id, eval_filename)
+            _persist_analysis_turn(req.session_id, None, "evaluate_paper", "Paper Evaluation", {"evaluation": payload})
+            return {"ok": True, "mode": req.mode, "evaluation": payload, "documents_used": [d["document_id"] for d in documents_found]}
+
+        if req.mode == "research_gaps":
+            query_text = "limitations, future work, open problems, unaddressed challenges, weaknesses, threats to validity"
+            top_k = min(18, REPORT_CHUNKS_PER_DOC * max(len(target_document_ids), 1))
+            chunks = _retrieve_for_analysis(query_text, target_document_ids, top_k)
+            if not chunks:
+                return {"ok": False, "mode": req.mode, "error": INSUFFICIENT_EVIDENCE_MESSAGE}
+            evidence_text = _evidence_text_from_chunks(chunks)
+            result = find_research_gaps(evidence_text)
+            documents_found = get_contributing_documents(chunks)
+            if result is None:
+                log_query_event(query="[analyze:research_gaps]", documents_searched=active_document_count, total_latency_s=round(time.time() - start, 3), task_status="FAILED", **_call_observability_fields(request_id, active_document_count))
+                return {"ok": False, "mode": req.mode, "error": GENERATION_FAILED_MESSAGE}
+            log_query_event(query="[analyze:research_gaps]", documents_searched=active_document_count, documents_contributing=len(documents_found), selected_evidence_count=len(chunks), total_latency_s=round(time.time() - start, 3), task_status="OK", **_call_observability_fields(request_id, active_document_count))
+            gaps_payload = [g.model_dump() for g in result.gaps]
+            # Display-only map so the UI can show each gap's paper by a
+            # human-readable title instead of its raw document_id.
+            document_titles = {d["document_id"]: resolve_display_title(d["document_id"], d["source"], index=i) for i, d in enumerate(documents_found)}
+            _persist_analysis_turn(req.session_id, None, "research_gaps", "Research Gaps", {"gaps": gaps_payload, "evidence_sufficient": result.evidence_sufficient, "document_titles": document_titles})
+            return {"ok": True, "mode": req.mode, "gaps": gaps_payload, "evidence_sufficient": result.evidence_sufficient, "document_titles": document_titles, "documents_used": [d["document_id"] for d in documents_found]}
+
+        if req.mode == "literature_matrix":
+            if len(target_document_ids) < 2:
+                return {"ok": False, "mode": req.mode, "error": "Select at least two papers to build a literature matrix."}
+            query_text = "problem, method, architecture, dataset, metrics, results, limitations, research gap"
+            top_k = min(18, REPORT_CHUNKS_PER_DOC * max(len(target_document_ids), 1))
+            chunks = _retrieve_for_analysis(query_text, target_document_ids, top_k)
+            if not chunks:
+                return {"ok": False, "mode": req.mode, "error": INSUFFICIENT_EVIDENCE_MESSAGE}
+            evidence_text = _evidence_text_from_chunks(chunks)
+            result = build_literature_matrix(evidence_text)
+            documents_found = get_contributing_documents(chunks)
+            if result is None:
+                log_query_event(query="[analyze:literature_matrix]", documents_searched=active_document_count, total_latency_s=round(time.time() - start, 3), task_status="FAILED", **_call_observability_fields(request_id, active_document_count))
+                return {"ok": False, "mode": req.mode, "error": GENERATION_FAILED_MESSAGE}
+            log_query_event(query="[analyze:literature_matrix]", documents_searched=active_document_count, documents_contributing=len(documents_found), selected_evidence_count=len(chunks), total_latency_s=round(time.time() - start, 3), task_status="OK", **_call_observability_fields(request_id, active_document_count))
+            rows_payload = [r.model_dump() for r in result.rows]
+            # Display-only: normalize every row's title — filename first,
+            # then the model's own title from this SAME call, never the raw
+            # document_id. document_id on each row is untouched.
+            filename_by_doc = {d["document_id"]: d["source"] for d in documents_found}
+            for i, row in enumerate(rows_payload):
+                row["title"] = resolve_display_title(row["document_id"], filename_by_doc.get(row["document_id"]), fallback_title=row.get("title"), index=i)
+            _persist_analysis_turn(req.session_id, None, "literature_matrix", "Literature Matrix", {"rows": rows_payload, "evidence_sufficient": result.evidence_sufficient})
+            return {"ok": True, "mode": req.mode, "rows": rows_payload, "evidence_sufficient": result.evidence_sufficient, "documents_used": [d["document_id"] for d in documents_found]}
+
+        if req.mode == "knowledge_graph":
+            query_text = "key concepts, methodology, architecture, datasets, results, contributions, limitations, relationships"
+            top_k = min(18, REPORT_CHUNKS_PER_DOC * max(len(target_document_ids), 1))
+            chunks = _retrieve_for_analysis(query_text, target_document_ids, top_k)
+            if not chunks:
+                return {"ok": False, "mode": req.mode, "error": INSUFFICIENT_EVIDENCE_MESSAGE}
+            evidence_text = _evidence_text_from_chunks(chunks)
+            result = build_knowledge_graph(evidence_text)
+            documents_found = get_contributing_documents(chunks)
+            if result is None:
+                log_query_event(query="[analyze:knowledge_graph]", documents_searched=active_document_count, total_latency_s=round(time.time() - start, 3), task_status="FAILED", **_call_observability_fields(request_id, active_document_count))
+                return {"ok": False, "mode": req.mode, "error": GENERATION_FAILED_MESSAGE}
+            log_query_event(query="[analyze:knowledge_graph]", documents_searched=active_document_count, documents_contributing=len(documents_found), selected_evidence_count=len(chunks), total_latency_s=round(time.time() - start, 3), task_status="OK", **_call_observability_fields(request_id, active_document_count))
+            nodes_payload = [n.model_dump() for n in result.nodes]
+            edges_payload = [e.model_dump() for e in result.edges]
+            # Display-only map so node/edge document_id pills in the UI show
+            # a human-readable title instead of the raw document_id.
+            document_titles = {d["document_id"]: resolve_display_title(d["document_id"], d["source"], index=i) for i, d in enumerate(documents_found)}
+            _persist_analysis_turn(req.session_id, None, "knowledge_graph", "Knowledge Graph", {"nodes": nodes_payload, "edges": edges_payload, "evidence_sufficient": result.evidence_sufficient, "document_titles": document_titles})
+            return {"ok": True, "mode": req.mode, "nodes": nodes_payload, "edges": edges_payload, "evidence_sufficient": result.evidence_sufficient, "document_titles": document_titles, "documents_used": [d["document_id"] for d in documents_found]}
 
         # Project Interview — grounded in the currently selected/referenced
         # uploaded document(s) by default (NOT VerityRAG's own architecture;

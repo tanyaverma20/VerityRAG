@@ -37,6 +37,7 @@ from query_transform import (
     RATE_LIMIT_MESSAGE, GENERATION_FAILED_MESSAGE, NO_DOCUMENTS_MESSAGE,
 )
 from schemas import ResearchReport, PaperReport, ComparisonReport
+from doc_titles import resolve_display_title
 
 # A fixed, broad query designed to surface chunks touching every report
 # section (problem, method, data, results, limitations) rather than one
@@ -210,6 +211,13 @@ def generate_report(document_ids: list[str]) -> dict[str, Any]:
     except Exception as e:
         return {"ok": False, "error": RATE_LIMIT_MESSAGE if is_rate_limit_error(e) else GENERATION_FAILED_MESSAGE}
 
+    # Display-layer only: normalize every paper's title to something a human
+    # can read — filename first, then the model's own title from this SAME
+    # call (no extra LLM call), never the raw document_id. document_id on
+    # each PaperReport is untouched; this only rewrites the display title.
+    for i, p in enumerate(report.papers):
+        p.title = resolve_display_title(p.document_id, filename_map.get(p.document_id), fallback_title=p.title, index=i)
+
     # Citations stay evidence-derived (deterministic), same rule as Q&A.
     citations = [
         {
@@ -258,7 +266,7 @@ def render_report_markdown(report: ResearchReport) -> str:
     lines = [f"# {report.title}", "", report.overview, ""]
 
     for p in report.papers:
-        lines.append(f"## {p.title or p.document_id}")
+        lines.append(f"## {p.title or 'Untitled Document'}")
         for attr, label in _SCALAR_FIELDS:
             lines += [f"**{label}:** {getattr(p, attr) or UNAVAILABLE_TEXT}", ""]
         for attr, label in _LIST_FIELDS:
@@ -310,7 +318,7 @@ def render_report_pdf(report: ResearchReport) -> bytes:
     story = [Paragraph(esc(report.title), h1), Paragraph(esc(report.overview), body), Spacer(1, 6)]
 
     for p in report.papers:
-        story.append(Paragraph(esc(p.title or p.document_id), h2))
+        story.append(Paragraph(esc(p.title or 'Untitled Document'), h2))
         for attr, field_label in _SCALAR_FIELDS:
             story += [Paragraph(field_label, label), Paragraph(esc(getattr(p, attr) or UNAVAILABLE_TEXT), body)]
         for attr, field_label in _LIST_FIELDS:
@@ -355,7 +363,7 @@ def render_report_docx(report: ResearchReport) -> bytes:
     accent = RGBColor(0x4F, 0x46, 0xE5)
 
     for p in report.papers:
-        h = doc.add_heading(p.title or p.document_id, level=1)
+        h = doc.add_heading(p.title or "Untitled Document", level=1)
         h.runs[0].font.color.rgb = accent
 
         for attr, field_label in _SCALAR_FIELDS:

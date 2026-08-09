@@ -92,7 +92,15 @@ STRUCTURED_SCHEMA_SUFFIX = """
 The caller has ALSO explicitly requested structured research extraction.
 In ADDITION to the fields above, include a "structured" object built ONLY
 from the evidence — use null (for strings) or [] (for lists) for anything
-the evidence doesn't cover; never invent a value to fill a field:
+the evidence doesn't cover; never invent a value to fill a field. ALSO
+include a "claims" array: break your own "answer" into its individual
+factual claims, and for each one report how well the evidence above
+actually supports it — "DIRECTLY_STATED" (the evidence says this near-
+verbatim), "STRONGLY_SUPPORTED" (not stated outright but clearly follows
+from the evidence), or "NOT_FOUND" (you included it but the evidence
+above doesn't actually back it — this should be rare, since you should
+avoid making such claims in the first place). List the document_id(s)
+each claim traces to.
 {
   "structured": {
     "architecture": "... or null",
@@ -103,7 +111,10 @@ the evidence doesn't cover; never invent a value to fill a field:
     "key_calculations": ["specific formulas/numbers mentioned, e.g. '28.4 BLEU on WMT14 En-De'"],
     "limitations": ["..."],
     "final_summary": "... or null"
-  }
+  },
+  "claims": [
+    {"claim": "...", "support": "DIRECTLY_STATED", "document_ids": ["..."]}
+  ]
 }"""
 
 MULTI_PAPER_FORMAT = """
@@ -207,6 +218,7 @@ def synthesize_answer(state: ResearchState) -> dict[str, Any]:
     evidence_sufficient = False
     self_reported_document_ids: list[str] = []
     structured_data = None
+    claim_evidence_trace: list[dict] = []
     synthesis_succeeded = False
 
     if GROQ_API_KEY:
@@ -228,6 +240,7 @@ def synthesize_answer(state: ResearchState) -> dict[str, Any]:
             self_reported_document_ids = parsed.document_ids
             if structured_mode:
                 structured_data = parsed.structured.model_dump()
+                claim_evidence_trace = [c.model_dump() for c in parsed.claims]
             if draft_answer:
                 synthesis_succeeded = True
         except ValidationError:
@@ -268,6 +281,12 @@ def synthesize_answer(state: ResearchState) -> dict[str, Any]:
         # None unless structured_mode was requested AND synthesis succeeded —
         # never partially-populated from a failed/invalid response.
         "structured_data": structured_data if synthesis_succeeded else None,
+        # Internal claim-level evidence trace (DIRECTLY_STATED /
+        # STRONGLY_SUPPORTED / NOT_FOUND) — rides along on the SAME call,
+        # only populated in structured_mode, never surfaced in the normal
+        # chat UI. A distinct key from "claims" (the Deep-Research verifier's
+        # separate claim graph) so the two never collide.
+        "claim_evidence_trace": claim_evidence_trace if synthesis_succeeded else [],
         "citations": citations_list if synthesis_succeeded else [],
         "status": "synthesized" if synthesis_succeeded else "synthesis_failed"
     }

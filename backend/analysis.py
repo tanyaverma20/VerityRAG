@@ -21,7 +21,10 @@ import json
 import re
 
 from query_transform import _call_groq_raw, INSUFFICIENT_EVIDENCE_MESSAGE
-from schemas import AnswerJSON, QuestionSetJSON, AnswerEvaluationJSON
+from schemas import (
+    AnswerJSON, QuestionSetJSON, AnswerEvaluationJSON,
+    PaperEvaluationJSON, ResearchGapsJSON, LiteratureMatrixJSON, KnowledgeGraphJSON,
+)
 from pydantic import ValidationError
 
 
@@ -227,6 +230,7 @@ Rules:
 - Use ONLY what the evidence actually contains. Do not invent axis labels, values, or components that aren't in the text.
 - If the evidence doesn't contain enough about this specific figure/table to explain it reliably (e.g. the caption/reference wasn't retrieved), say so explicitly rather than guessing.
 - Do not include chunk IDs or technical citations in the answer text.
+- HONESTY: the "evidence" above is the figure/table's caption and surrounding extracted TEXT — you have not seen the actual image/rendering. Never write as if you visually inspected the figure (e.g. never claim to see specific colors, exact pixel positions, or line styles that aren't described in the text). If the caption/text doesn't state a detail, say it isn't available from the extracted text rather than inferring it from what such a figure would typically look like.
 
 Output ONLY compact JSON:
 {{
@@ -408,5 +412,186 @@ def evaluate_interview_answer(evidence_text: str, question: str, user_answer: st
         if obj is None:
             return None
         return AnswerEvaluationJSON.model_validate(obj)
+    except (ValidationError, Exception):
+        return None
+
+
+# ---------------------------------------------------------------------------
+# PDF-grounded: Evaluate Paper — a structured critique across fixed
+# dimensions, each one distinguishing what the paper directly states, what's
+# strongly implied, and what simply isn't in the evidence. ONE LLM call.
+# ---------------------------------------------------------------------------
+EVALUATE_PAPER_PROMPT = """You are critically evaluating a single research paper/project, using ONLY the evidence below (retrieved from the user's selected uploaded document).
+
+EVIDENCE:
+{evidence_text}
+
+For EACH dimension below, give a concise assessment and mark its support level:
+- "DIRECTLY_STATED": the paper explicitly says this (e.g. states its own limitation, states its own novelty claim).
+- "STRONGLY_SUPPORTED": not stated outright, but clearly and reasonably inferable from what IS stated (e.g. inferring "the method is not evaluated on production traffic" because only offline datasets are mentioned).
+- "NOT_FOUND": the evidence doesn't cover this dimension at all — do not guess; leave assessment empty and set support to "NOT_FOUND".
+
+Dimensions: problem_clarity, novelty, methodology, experimental_design, results, limitations, reproducibility.
+
+Also list concrete strengths and weaknesses (each grounded in the evidence, not generic), and a 2-4 sentence overall_assessment that is honest about both merit and gaps.
+
+Rules:
+- Never invent a claim, number, or comparison that isn't in the evidence.
+- A paper with thin evidence should have MORE "NOT_FOUND" dimensions, not a padded-out assessment.
+
+Output ONLY compact JSON:
+{{
+  "problem_clarity": {{"assessment": "...", "support": "DIRECTLY_STATED"}},
+  "novelty": {{"assessment": "...", "support": "STRONGLY_SUPPORTED"}},
+  "methodology": {{"assessment": "...", "support": "DIRECTLY_STATED"}},
+  "experimental_design": {{"assessment": "...", "support": "DIRECTLY_STATED"}},
+  "results": {{"assessment": "...", "support": "DIRECTLY_STATED"}},
+  "limitations": {{"assessment": "...", "support": "DIRECTLY_STATED"}},
+  "reproducibility": {{"assessment": "...", "support": "NOT_FOUND"}},
+  "strengths": ["..."],
+  "weaknesses": ["..."],
+  "overall_assessment": "...",
+  "evidence_sufficient": true
+}}
+JSON:"""
+
+
+def evaluate_paper(evidence_text: str, document_id: str) -> PaperEvaluationJSON | None:
+    prompt = EVALUATE_PAPER_PROMPT.format(evidence_text=evidence_text)
+    try:
+        # 7 dimensions + strengths/weaknesses/overall routinely exceed the
+        # default MAX_ANSWER_TOKENS (1024) and get cut off mid-JSON — the
+        # SAME root cause as the token-budget bug fixed in retrieval.py:
+        # something silently overrunning its configured budget. A wider
+        # output budget here, not a second call.
+        raw = _call_groq_raw(prompt, max_tokens=2048)
+        obj = _extract_json_object(raw)
+        if obj is None:
+            return None
+        obj["document_id"] = document_id
+        return PaperEvaluationJSON.model_validate(obj)
+    except (ValidationError, Exception):
+        return None
+
+
+# ---------------------------------------------------------------------------
+# PDF-grounded: Research Gap Discovery — labels each gap by provenance.
+# ---------------------------------------------------------------------------
+RESEARCH_GAPS_PROMPT = """You are identifying research gaps in the document(s) below, using ONLY this evidence (retrieved from the user's selected uploaded document(s), grouped by "--- Document ID: X ---").
+
+EVIDENCE:
+{evidence_text}
+
+Find gaps and label each one by where it came from:
+- "AUTHOR_STATED_GAP": the authors explicitly name this as a limitation, open problem, or future work item.
+- "POTENTIAL_INFERRED_GAP": not stated by the authors, but a reasonable gap you can infer from what the evidence DOES say (e.g. no ablation study is described, so its absence is an inferred gap) — be conservative, only infer what the evidence actually supports the absence of.
+
+For each gap, include the specific evidence text/reasoning it's based on, and which document_id it applies to (use the exact Document ID string from the evidence headers).
+
+Rules:
+- Do not invent gaps unrelated to what's in the evidence.
+- If the evidence is too thin to respinsibly infer anything beyond what's stated, only return AUTHOR_STATED_GAP entries and set evidence_sufficient to false if there are none of those either.
+
+Output ONLY compact JSON:
+{{
+  "gaps": [
+    {{"gap": "...", "label": "AUTHOR_STATED_GAP", "evidence": "...", "document_id": "..."}}
+  ],
+  "evidence_sufficient": true
+}}
+JSON:"""
+
+
+def find_research_gaps(evidence_text: str) -> ResearchGapsJSON | None:
+    prompt = RESEARCH_GAPS_PROMPT.format(evidence_text=evidence_text)
+    try:
+        raw = _call_groq_raw(prompt, max_tokens=1536)  # a multi-paper gap list can exceed the 1024 default
+        obj = _extract_json_object(raw)
+        if obj is None:
+            return None
+        return ResearchGapsJSON.model_validate(obj)
+    except (ValidationError, Exception):
+        return None
+
+
+# ---------------------------------------------------------------------------
+# PDF-grounded: Literature Matrix — one row per paper, each cell grounded
+# ONLY in that paper's own evidence block (never borrowed from another
+# paper's section, even when the model can see both in the same prompt).
+# ---------------------------------------------------------------------------
+LITERATURE_MATRIX_PROMPT = """You are building a literature comparison matrix from the evidence below (retrieved from the user's selected uploaded documents, grouped by "--- Document ID: X ---").
+
+EVIDENCE:
+{evidence_text}
+
+Produce exactly ONE row per Document ID that appears in the evidence above (use the exact Document ID string as document_id). For EACH row, fill problem / method / architecture / dataset / metrics / results / limitations / research_gap using ONLY that paper's own evidence block — never copy or infer a value from a different paper's section, even if it seems similar. If a paper's evidence doesn't cover a field, use exactly "Not available in uploaded evidence" for that field — never leave it blank or guess.
+
+Output ONLY compact JSON:
+{{
+  "rows": [
+    {{"document_id": "...", "title": "...", "problem": "...", "method": "...", "architecture": "...", "dataset": "...", "metrics": "...", "results": "...", "limitations": "...", "research_gap": "..."}}
+  ],
+  "evidence_sufficient": true
+}}
+JSON:"""
+
+
+def build_literature_matrix(evidence_text: str) -> LiteratureMatrixJSON | None:
+    prompt = LITERATURE_MATRIX_PROMPT.format(evidence_text=evidence_text)
+    try:
+        # 8 text fields per paper, one row per paper — scales with N papers,
+        # easily exceeding the 1024-token default for 3+ papers.
+        raw = _call_groq_raw(prompt, max_tokens=2560)
+        obj = _extract_json_object(raw)
+        if obj is None:
+            return None
+        return LiteratureMatrixJSON.model_validate(obj)
+    except (ValidationError, Exception):
+        return None
+
+
+# ---------------------------------------------------------------------------
+# PDF-grounded: Knowledge Graph — single-paper concept tree, or multi-paper
+# evidence-supported relationships. Every node/edge carries the document_id
+# it came from so a multi-paper graph never blurs provenance.
+# ---------------------------------------------------------------------------
+KNOWLEDGE_GRAPH_PROMPT = """You are extracting a knowledge graph from the evidence below (retrieved from the user's selected uploaded document(s), grouped by "--- Document ID: X ---").
+
+EVIDENCE:
+{evidence_text}
+
+Build nodes (id, label, type, document_id) and edges (source id, target id, relation, document_id). Node "type" is one of: paper, method, dataset, result, concept, limitation.
+
+If there is exactly one Document ID in the evidence: build a tree rooted at a "paper" node for that document, branching into its method/dataset/result/limitation concepts, each edge relation describing the relationship (e.g. "uses", "evaluated_on", "reports", "limited_by").
+
+If there are multiple Document IDs: additionally add edges directly BETWEEN nodes belonging to different documents ONLY when the evidence itself supports a real relationship (e.g. both use the same dataset, one extends or contrasts with the other's method) — never invent a cross-paper relationship the evidence doesn't support. Every node and edge must carry the document_id it came from (a genuinely cross-paper edge may reference either contributing document_id in "document_id", but only add such an edge when both endpoints' evidence supports it).
+
+Rules:
+- Every node/edge must trace to the evidence — do not invent concepts, datasets, or relationships not present.
+- Keep the graph compact: prefer the most important 8-14 nodes over an exhaustive list — a smaller, complete, correctly-closed JSON graph is far more useful than a larger one that gets cut off.
+
+Output ONLY compact JSON, with SHORT labels/relations (a few words each, not full sentences):
+{{
+  "nodes": [{{"id": "...", "label": "...", "type": "method", "document_id": "..."}}],
+  "edges": [{{"source": "...", "target": "...", "relation": "...", "document_id": "..."}}],
+  "evidence_sufficient": true
+}}
+JSON:"""
+
+
+def build_knowledge_graph(evidence_text: str) -> KnowledgeGraphJSON | None:
+    prompt = KNOWLEDGE_GRAPH_PROMPT.format(evidence_text=evidence_text)
+    try:
+        # A node/edge graph is one of the more verbose outputs here — the
+        # 1024-token default was observed to truncate mid-JSON on real
+        # multi-node graphs, which _extract_json_object then correctly
+        # fails to parse (returns None) rather than accepting broken JSON.
+        # Same fix pattern as evaluate_paper/literature_matrix: a wider
+        # output budget, still exactly ONE call.
+        raw = _call_groq_raw(prompt, max_tokens=2048)
+        obj = _extract_json_object(raw)
+        if obj is None:
+            return None
+        return KnowledgeGraphJSON.model_validate(obj)
     except (ValidationError, Exception):
         return None
