@@ -1,5 +1,4 @@
 import re as _re
-import shutil
 import tempfile
 from pathlib import Path
 
@@ -38,7 +37,7 @@ from query_transform import (
     GENERATION_FAILED_MESSAGE, is_rate_limit_error,
     start_call_tracking, get_call_log,
 )
-from config import GROQ_MODEL, GROQ_FALLBACK_MODEL, REPORT_CHUNKS_PER_DOC
+from config import GROQ_MODEL, GROQ_FALLBACK_MODEL, REPORT_CHUNKS_PER_DOC, MAX_UPLOAD_BYTES
 import cache
 from schemas import ResearchReport, PaperReport, ComparisonReport
 from report_generator import generate_report, render_report_markdown, render_report_pdf, render_report_docx
@@ -299,9 +298,36 @@ async def upload_document(file: UploadFile = File(...), workspace_id: str | None
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(400, "Only PDF files are supported right now.")
 
+    # Security audit finding (Phase 13): stream to the temp file in bounded
+    # chunks, counting real bytes read — never trust a client-supplied
+    # Content-Length header, and never buffer an unbounded upload into
+    # memory or disk before checking. Aborts (and cleans up the partial
+    # temp file) the moment the real byte count exceeds MAX_UPLOAD_BYTES,
+    # rather than after the whole file has already been written.
+    total_bytes = 0
+    chunk_size = 1024 * 1024
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-        shutil.copyfileobj(file.file, tmp)
         tmp_path = tmp.name
+        while True:
+            chunk = await file.read(chunk_size)
+            if not chunk:
+                break
+            total_bytes += len(chunk)
+            if total_bytes > MAX_UPLOAD_BYTES:
+                tmp.close()
+                Path(tmp_path).unlink(missing_ok=True)
+                raise HTTPException(413, f"File exceeds the {MAX_UPLOAD_BYTES // (1024 * 1024)} MB upload limit.")
+            tmp.write(chunk)
+
+    # Security audit finding (Phase 13): a client can name any file
+    # `something.pdf` regardless of its real content — verify the actual
+    # magic bytes before handing it to the PDF-parsing pipeline, rather
+    # than relying on the filename extension alone.
+    with open(tmp_path, "rb") as f:
+        header = f.read(5)
+    if header != b"%PDF-":
+        Path(tmp_path).unlink(missing_ok=True)
+        raise HTTPException(400, "File does not look like a real PDF (missing %PDF- header).")
 
     try:
         result = ingest_document(tmp_path, original_filename=file.filename, workspace_id=workspace_id)

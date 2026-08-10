@@ -61,6 +61,24 @@ def _migrate_legacy_columns() -> None:
             default_ws = session.get(Workspace, "default")
             if default_ws is None:
                 session.add(Workspace(workspace_id="default", name="My Research", created_at=now, updated_at=now))
+                # session_scope()'s sessionmaker is configured with
+                # autoflush=False (deliberately, elsewhere, for isolation-
+                # fixture correctness) — so the INSERT for this new
+                # Workspace row is only PENDING in the ORM session here,
+                # not yet sent to the database. The two statements below
+                # are raw Core-style bulk UPDATEs (session.execute(), not
+                # ORM object mutation), which do NOT trigger or wait on
+                # autoflush. Without an explicit flush, they would run
+                # BEFORE the workspace INSERT reaches the database,
+                # violating documents_workspace_id_fkey /
+                # sessions_workspace_id_fkey on any real foreign-key-
+                # enforcing backend (confirmed as a real, actively-
+                # occurring failure against live PostgreSQL — silently
+                # swallowed by init_db()'s best-effort try/except, so the
+                # backfill just never happened). Flushing here makes the
+                # INSERT visible to the UPDATEs that follow, in the same
+                # transaction.
+                session.flush()
             session.execute(Document.__table__.update().where(Document.workspace_id.is_(None)).values(workspace_id="default"))
             session.execute(SessionModel.__table__.update().where(SessionModel.workspace_id.is_(None)).values(workspace_id="default"))
 

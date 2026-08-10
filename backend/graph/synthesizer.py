@@ -8,7 +8,6 @@ free-form metadata: the smaller the requested schema, the fewer output
 tokens the ONE call needs to spend, and the less there is for the model to
 get wrong.
 """
-import re
 import sys
 import os
 from typing import Any
@@ -25,6 +24,7 @@ from query_transform import (
 )
 from config import GROQ_API_KEY
 from schemas import AnswerJSON, StructuredAnswerJSON
+from json_extract import extract_json_object
 
 
 SYNTHESIS_PROMPT = """You are VerityRAG, a research assistant.
@@ -224,8 +224,16 @@ def synthesize_answer(state: ResearchState) -> dict[str, Any]:
     if GROQ_API_KEY:
         try:
             raw = _call_groq_raw(prompt)  # <-- the ONE LLM call for a normal query
-            match = re.search(r'\{.*\}', raw, re.DOTALL)
-            if not match:
+            # Robust extraction (json_extract.py), not a naive greedy
+            # regex: the bounded fallback model (GROQ_FALLBACK_MODEL) can
+            # be a reasoning-style model whose <think> preamble contains
+            # its own unrelated curly braces (e.g. LaTeX notation) or that
+            # wraps its JSON answer in a markdown code fence — both
+            # confirmed as real failure modes that broke the old
+            # first-brace-to-last-brace regex, silently turning a genuinely
+            # good answer into a fabricated "generation failed" message.
+            obj = extract_json_object(raw)
+            if obj is None:
                 raise ValueError("Model response did not contain a JSON object")
             # Pydantic validation, not ad-hoc dict.get() calls: a malformed
             # or incomplete response is treated as a synthesis failure —
@@ -233,7 +241,7 @@ def synthesize_answer(state: ResearchState) -> dict[str, Any]:
             # again. with_model_fallback() already used its one allowed
             # fallback attempt inside _call_groq_raw before this point.
             schema = StructuredAnswerJSON if structured_mode else AnswerJSON
-            parsed = schema.model_validate_json(match.group())
+            parsed = schema.model_validate(obj)
             draft_answer = parsed.answer
             grounded = parsed.grounded
             evidence_sufficient = parsed.evidence_sufficient

@@ -210,33 +210,47 @@ Each component's responsibility, kept deliberately separate:
 
 **PostgreSQL** — `backend/db/` is a SQLAlchemy repository layer (models in
 `db/models.py`, engine/session handling in `db/session.py`, CRUD in
-`db/repository.py`) with an Alembic migration (`backend/alembic/`).
-`database.py` is now a thin re-export of this package, so every existing
-call site is unaffected. Backend selection: `DATABASE_URL` (a real
-`postgresql+psycopg2://...` URL) in production; the same SQLite file this
-project has always used otherwise — local dev and the test suite need
-nothing extra installed. Connection pooling (`pool_size`/`max_overflow`,
-env-configurable) and `pool_pre_ping` are enabled for the PostgreSQL path;
-every write goes through one transaction (commit-on-success,
-rollback-and-reraise-on-any-exception). Verified in this environment
-against SQLite (no live PostgreSQL server was available in the sandbox
-this was built in) — the same code path runs against real PostgreSQL the
-moment `DATABASE_URL` points at one; nothing here is PostgreSQL-specific
-beyond the driver string.
+`db/repository.py`) with Alembic migrations (`backend/alembic/`).
+`database.py` is a thin re-export of this package, so every existing call
+site is unaffected. Backend selection: `DATABASE_URL` (a real
+`postgresql://...` URL) in production; the same SQLite file this project
+has always used otherwise — local dev and the test suite need nothing
+extra installed. **Verified against a real local PostgreSQL 18 instance**,
+not just SQLite: real `QueuePool` connection pooling
+(`pool_size`/`max_overflow`, env-configurable) with `pool_pre_ping`; every
+write goes through one transaction (commit-on-success,
+rollback-and-reraise-on-any-exception — confirmed by deliberately causing
+a foreign-key violation and proving nothing partial persisted); cascade
+deletes confirmed at the actual database level (`ON DELETE CASCADE`
+constraints, not just the ORM's own relationship config, which matters
+since the repository layer uses bulk `DELETE` statements that bypass
+SQLAlchemy's ORM-level cascade); Alembic confirmed at head against the
+live database. Dedicated live-integration tests
+(`backend/test_postgres_live.py`) auto-skip (never fake-pass) when no
+reachable PostgreSQL server is configured.
 
 **Redis** — `cache.py` keeps its exact original public functions
 (`get_cached_answer`, `set_cached_answer`, `get_cached_report`, etc.) but
-now has a pluggable backend: Redis when `REDIS_URL` is set and reachable,
-the original in-memory dict otherwise — including automatic fallback if
-Redis becomes unreachable *mid-session* (every Redis call is individually
+has a pluggable backend: Redis when `REDIS_URL` is set and reachable, the
+original in-memory dict otherwise — including automatic fallback if Redis
+becomes unreachable *mid-session* (every Redis call is individually
 wrapped; a failure degrades that one call to a cache miss, never raises
 into a request). Cache keys include workspace_id, document_ids, the
 normalized query, mode/research_type, and a config fingerprint. TTL is
-configurable (`CACHE_TTL_SECONDS`). Hit/miss/backend counters are exposed
-via `cache.stats()` and the Eval Dashboard.
+configurable (`CACHE_TTL_SECONDS`). **Verified against a real Redis
+server** (Docker), including deliberately stopping and restarting the
+container mid-session: real network round-trips (confirmed via a second,
+independent client), server-enforced TTL expiry, workspace/document-scoped
+key isolation, invalidation, graceful degradation during a real outage
+(GET/SET neither raise nor crash), and recovery with no process restart
+required. Dedicated live-integration tests (`backend/test_redis_live.py`)
+auto-skip when no reachable Redis server is configured; the
+destructive stop/restart scenario has its own manual script
+(`backend/scripts/verify_redis_outage_recovery.py`), deliberately not
+part of the automated suite since it stops a real service.
 
 **Workspace-scoped vector isolation** — every indexed chunk's Chroma
-metadata now carries `workspace_id` alongside `document_id`/`chunk_id`/
+metadata carries `workspace_id` alongside `document_id`/`chunk_id`/
 `parent_id`. Retrieval (`retrieval.py:_scope_where_clause`) enforces
 `workspace_id` AND `document_id` directly in the Chroma query itself when
 a caller supplies a workspace_id — an additive, optional second
@@ -244,8 +258,17 @@ enforcement point on top of the pre-existing SQL-layer check
 (`_resolve_document_scope`/`documents_in_workspace`), never a replacement
 for it, and never breaking a caller that omits workspace_id. Chunks
 ingested before this feature existed simply carry no workspace_id, so they
-never match a workspace-scoped query rather than leaking into one. This is
-**workspace-level data isolation, not user authentication** — this
+never match a workspace-scoped query rather than leaking into one. A
+dedicated **adversarial** audit (`backend/test_adversarial_isolation.py`,
+beyond the happy-path isolation tests) found and closed three real
+cross-workspace gaps: background task results (`GET /task/{id}`) were
+readable by any workspace that learned the task_id; `/report` had no
+workspace scoping at all; and `GET`/`DELETE /documents/{id}` had no
+ownership check — the delete gap meant a workspace could delete another
+workspace's document if it could compute the content-hash document_id
+(e.g. by holding an identical public paper). All three are fixed with the
+same opt-in, backward-compatible pattern used everywhere else in this API.
+This is **workspace-level data isolation, not user authentication** — this
 repository has no login/user system, and none was invented; binding a
 workspace to an authenticated identity is a separate, unimplemented
 concern (see `backend/test_workspace_vector_isolation.py`, whose last test
@@ -380,8 +403,9 @@ guarantee zero hallucinations, which no LLM-based system can.
 | OCR (optional) | pytesseract + Tesseract (system binary, not bundled) |
 | Validation | Pydantic v2 |
 | Report export | ReportLab (PDF), python-docx (DOCX) |
-| Frontend | Vanilla HTML/CSS/JS — no framework, no build step (see [React Migration Status](#react-migration-status)) |
-| Testing | pytest, `unittest.mock` (Groq network-boundary mocking), `psutil` (benchmark resource usage) |
+| Frontend (served) | Vanilla HTML/CSS/JS — no framework, no build step |
+| Frontend (in progress) | React 19 + TypeScript + Vite (`frontend-react/`, core flows only — see [React Migration Status](#react-migration-status)) |
+| Testing | pytest, `unittest.mock` (Groq network-boundary mocking), `psutil` (benchmark resource usage); Vitest + React Testing Library (frontend) |
 
 ---
 
@@ -389,8 +413,14 @@ guarantee zero hallucinations, which no LLM-based system can.
 
 ```
 verityrag/
-├── frontend/
+├── frontend/                       Served vanilla-JS frontend (feature-complete)
 │   └── index.html
+├── frontend-react/                 React + TypeScript + Vite frontend (in progress — core flows only)
+│   ├── src/
+│   │   ├── api/                        Typed client + request/response interfaces
+│   │   ├── hooks/                       useWorkspace, useChat
+│   │   └── components/                   Sidebar, ChatWindow, MessageBubble
+│   └── README.md                   Honest scope/gap list
 ├── backend/
 │   ├── main.py
 │   ├── config.py
@@ -416,13 +446,18 @@ verityrag/
 │   ├── llm.py
 │   ├── eval_harness.py
 │   ├── run_evaluation.py          Real 11-paper/113-question retrieval benchmark (pre-existing)
+│   ├── scripts/
+│   │   ├── verify_redis_outage_recovery.py   Manual: stops/restarts real Redis, proves fallback
+│   │   └── run_groundedness_sample.py         Manual: real groundedness_eval.py run, saves results
 │   ├── requirements.txt
 │   ├── .env.example               Placeholders only — never a real credential
-│   ├── conftest.py              pytest isolation — temp Chroma/SQLite, never production
-│   ├── test_*.py                 275+ tests across ingestion, retrieval, the LangGraph
-│   │                              workflow, analysis modes, scoping, DB, cache, workspace
-│   │                              isolation, figure vision, OCR, groundedness, and eval
-│   ├── tests/fixtures/             Test-only PDF fixture, isolated from the real workspace
+│   ├── conftest.py              pytest isolation — established in pytest_configure(), before
+│   │                              collection even starts (see Testing)
+│   ├── test_*.py                 320 tests across ingestion, retrieval, the LangGraph
+│   │                              workflow, analysis modes, scoping, DB, cache, live
+│   │                              Postgres/Redis, workspace isolation (incl. adversarial),
+│   │                              figure vision, OCR, groundedness, and eval
+│   ├── tests/fixtures/             Test-only PDF fixtures, isolated from the real workspace
 │   ├── graph/
 │   │   ├── workflow.py               StateGraph definition (normal + Deep Research)
 │   │   ├── state.py                   Shared ResearchState TypedDict
@@ -440,8 +475,11 @@ verityrag/
 │   └── README.md                  Human-readable report of the same
 ├── data/
 │   ├── registry.db                            SQLite registry (runtime data; default backend)
+│   ├── uploads/                                 Persisted original PDFs, keyed by document_id
+│   │                                              (enables Explain Figure's page rendering)
 │   ├── eval_set.json                            Offline evaluation questions (11 real papers)
-│   └── eval_results_comprehensive.json           Offline evaluation results
+│   ├── eval_results_comprehensive.json           Offline evaluation results
+│   └── groundedness_eval_results.json            Real (opt-in) groundedness run output, if present
 ├── docs/images/
 │   └── verity-ui.png
 └── logs/
@@ -531,35 +569,47 @@ cd backend
 python -m pytest --ignore=test_eval.py -q
 ```
 
-The suite is 300 collected tests, split by dependency on real network calls:
+The suite is 320 collected tests, split by dependency on real infrastructure:
 
-- **276 tests** (everything except `test_eval.py`) run against an isolated,
-  temp-directory Chroma/SQLite environment set up automatically by
-  `conftest.py` — the real `backend/chroma_store` and production
-  `data/registry.db` are never touched. Most LLM-dependent assertions mock
+- **Isolated, mocked-LLM tests** (the great majority) run against a
+  temp-directory Chroma/SQLite environment established *before pytest
+  collection even begins* (`conftest.py`'s `pytest_configure()` hook —
+  deliberately placed there, not in a fixture, after a real bug was found
+  where a module-level side effect in a test file could otherwise run
+  against production infrastructure before any fixture had a chance to
+  isolate it). The real `backend/chroma_store` and production database are
+  never touched by this tier. Most LLM-dependent assertions mock
   `groq.Groq` at the network boundary, so exact physical call counts are
   *proven*, not assumed (see `test_llm_call_count.py`,
   `test_analysis_modes.py`). Retrieval, reranking, and scoping assertions
   run against real (test-fixture) Chroma data — only the LLM call itself is
-  mocked. New coverage in this pass: `test_db_repository.py` (SQLAlchemy
-  CRUD/transactions/isolation), `test_cache_redis.py` (hit/miss/TTL/
-  fallback/scoping, including a fake Redis client), `test_workspace_vector_
-  isolation.py` (all 7 required cross-workspace scenarios), `test_figure_
-  vision.py` (real PyMuPDF page rendering + honest vision/text fallback),
-  `test_ocr_fallback.py`, `test_groundedness_eval.py`, and
-  `test_eval_dashboard_extended.py`.
+  mocked.
+- **`test_postgres_live.py` / `test_redis_live.py`** run against the
+  *real* local PostgreSQL/Redis instances when reachable, auto-skipping
+  (never fake-passing) otherwise — connection pooling, transactions,
+  cascade deletes, TTL, scoped keys, invalidation, all against the actual
+  services, not mocks.
+- **`test_adversarial_isolation.py`** — adversarial (not just happy-path)
+  cross-workspace tests: a workspace explicitly claiming another
+  workspace's real document/task/report and being rejected by the data
+  layer, not just the UI never showing it.
 - **`test_eval.py`** (~24 tests) exercises the pipeline against the real
   Groq API and is run deliberately, not as a routine check, to avoid
   burning API quota.
 
-Latest full run of the mocked/isolated suite: **275 passed, 1 pre-existing
-failure** (`test_graph.py::test_api_backward_compatibility` — a stale test
-double missing a field added by earlier workspace support, predates this
-round of work and is unrelated to retrieval, grounding, or any of the
-infrastructure added here).
+Latest full run: **310 passed, 10 skipped, 0 failed.** The 10 skips are
+`test_redis_live.py` — Docker Desktop was not running on the machine this
+was last verified on; that same suite has been run successfully against a
+live Redis container earlier in this project's development (including
+deliberately stopping/restarting it mid-session) — see
+[Production Infrastructure](#production-infrastructure).
 
 `backend/groundedness_eval.py` makes REAL Groq calls when actually run and
 is never part of the automated suite above — see [Grounding & Reliability](#grounding--reliability).
+
+**Frontend (`frontend-react/`):** `npm test` — 23 passing Vitest/React
+Testing Library tests (API client, component logic) plus a clean
+production build (`npm run build`). See [React Migration Status](#react-migration-status).
 
 ## Evaluation Harness
 
@@ -576,8 +626,8 @@ Two independent, real evaluations exist — deliberately not conflated:
    isolated-Chroma, 10-document benchmark proving indexing correctness,
    zero cross-document contamination, document isolation, comparison
    scaling at 2/5/10 documents, query-decomposition scope preservation,
-   concurrent-retrieval speedup (8.93x with 10 parallel queries in the
-   last run), and real latency distributions (mean 137.5ms / p95 150.8ms
+   concurrent-retrieval speedup (9.28x with 10 parallel queries in the
+   last run), and real latency distributions (mean 79.0ms / p95 82.7ms
    end-to-end retrieval) — see `evaluation/README.md` for the full report
    and exactly which numbers came from where.
 
@@ -676,28 +726,46 @@ implemented, and still-open items, not blurred together:
 
 **Implemented:**
 - **Workspace-scoped vector isolation** — see [Production Infrastructure](#production-infrastructure);
-  tested against all 7 required cross-workspace scenarios.
-- **PostgreSQL/Redis support** — real, tested code; verified against
-  SQLite/in-memory in this environment (no live PostgreSQL/Redis server
-  was available in the sandbox this was built in), designed to be
-  driver-agnostic beyond the connection string.
+  tested against all 7 required happy-path cross-workspace scenarios plus
+  a dedicated adversarial test suite that found and closed 3 real gaps
+  (task results, reports, document GET/DELETE).
+- **PostgreSQL/Redis support** — real, tested code, verified against
+  **live PostgreSQL and Redis instances**, not just SQLite/in-memory
+  fallbacks: connection pooling, transactions, cascade deletes, and
+  Alembic migration state confirmed against real Postgres; availability,
+  TTL, scoped keys, a real outage (container stopped mid-session), and
+  recovery confirmed against real Redis. See [Production Infrastructure](#production-infrastructure)
+  for specifics.
 - **OCR fallback exists** — but requires the Tesseract OCR system binary
   to be installed separately (this app never installs it); if it isn't
   present, OCR is skipped cleanly with a clear status, never a silent
-  failure or fabricated text.
+  failure or fabricated text. The insufficient-text detection that
+  triggers OCR is verified against a real, genuinely text-free synthetic
+  PDF, not only mocked scenarios — Tesseract itself remains uninstalled
+  in this environment, so actual text recovery is verified via mocks.
 - **Offline groundedness evaluation exists** (`groundedness_eval.py`) —
-  opt-in, makes real LLM calls, was verified via mocked tests rather than
-  a full live run in this pass (to avoid burning API quota on an infra
-  change) — run it yourself for real numbers on your own documents.
+  opt-in, makes real LLM calls, hardened against malformed/failed
+  synthesis responses (a single bad response no longer aborts an entire
+  batch evaluation) and **run for real** against a small live sample —
+  most calls hit genuine Groq free-tier rate limiting from this project's
+  own extensive testing, which the evaluator degraded from cleanly
+  (`NOT_MEASURED`, never a fabricated score); the Eval Dashboard reads and
+  surfaces whatever that real run actually produced. Run it again yourself
+  once quota resets, or against your own documents, for a cleaner sample.
+- **React frontend foundation** — see [React Migration Status](#react-migration-status).
 
 **Partially implemented:**
 - **Explain Figure's visual path** — the real infrastructure (PDF page
-  rendering via PyMuPDF, a multimodal Groq call path) is built and tested,
-  but requires `GROQ_VISION_MODEL` to be set to an actual vision-capable
-  model id. No such model is provisioned on the Groq account this was
-  built against, so in this deployment Explain Figure currently always
-  uses its original text/caption-based path — and says so explicitly in
-  every response, never claiming visual inspection that didn't happen.
+  rendering via PyMuPDF, a multimodal Groq call path, malformed-response
+  handling) is built and tested, but requires `GROQ_VISION_MODEL` to be
+  set to an actual vision-capable model id. No such model is provisioned
+  on the Groq account this was built against, so in this deployment
+  Explain Figure currently always uses its original text/caption-based
+  path — and says so explicitly in every response, never claiming visual
+  inspection that didn't happen.
+- **React frontend** — the core workspace/document/chat loop works
+  end-to-end against the real backend; most analysis-mode UIs are not yet
+  migrated. See [React Migration Status](#react-migration-status).
 
 **Not implemented / open:**
 - **No automated production groundedness/hallucination scoring on live
@@ -715,9 +783,11 @@ implemented, and still-open items, not blurred together:
 - **No user authentication** — workspace_id is a plain client-supplied
   scope identifier, not a security principal; binding workspaces to
   authenticated users is unimplemented and was not invented here.
+- **CORS is wide open** (`allow_origins=["*"]` in `main.py`) — correct for
+  local development, explicitly flagged in-code as needing to be
+  restricted to real origin(s) before any real deployment.
 - **No streaming output** — answers are returned in full, not
   token-by-token.
-- **React frontend migration** — see above.
 
 ## Future Improvements
 
@@ -731,7 +801,10 @@ implemented, and still-open items, not blurred together:
   out of the box.
 - Per-tenant vector store isolation and real authentication for multi-user
   deployment.
-- The React migration, scoped and executed as its own dedicated effort.
+- Finishing the React migration: Deep Research, Viva/Mock Test, Project
+  Interview, Explain Figure, Evaluate Paper, Research Gaps, Literature
+  Matrix, Knowledge Graph, Comparative Reports, and the Eval Dashboard UI
+  (see `frontend-react/README.md` for the exact gap list).
 - Streaming token-by-token responses for perceived latency.
 
 ---

@@ -18,7 +18,7 @@ Design constraints (Phase 2):
 import json
 import re
 import contextvars
-from config import GROQ_API_KEY, GROQ_MODEL, GROQ_FALLBACK_MODEL, MAX_ANSWER_TOKENS
+from config import GROQ_API_KEY, GROQ_MODEL, GROQ_FALLBACK_MODEL, MAX_ANSWER_TOKENS, MAX_VISION_ANSWER_TOKENS
 
 # ---------------------------------------------------------------------------
 # LLM call observability (item 17) — every physical Groq HTTP request made
@@ -228,7 +228,7 @@ def _call_groq_raw(prompt: str, max_tokens: int = MAX_ANSWER_TOKENS) -> str:
     return with_model_fallback(_attempt)
 
 
-def _call_groq_vision_raw(prompt: str, image_base64: str, vision_model: str, max_tokens: int = MAX_ANSWER_TOKENS) -> str | None:
+def _call_groq_vision_raw(prompt: str, image_base64: str, vision_model: str, max_tokens: int = MAX_VISION_ANSWER_TOKENS) -> str | None:
     """
     Multimodal Groq call: one text prompt + one base64 PNG image, sent to
     an explicitly-configured vision-capable model (figure_vision.py:

@@ -2,7 +2,6 @@
 analyzer.py — Phase 6 Analyzer node for Evidence gap detection and Cross-Paper analysis
 """
 import json
-import re
 from typing import Any
 from .state import ResearchState
 
@@ -11,6 +10,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from query_transform import _call_groq_raw
 from config import GROQ_API_KEY
+from json_extract import extract_json_object
 
 SUFFICIENCY_PROMPT = """You are an evidence analyzer for an academic RAG system.
 Evaluate the retrieved evidence against the research plan.
@@ -80,9 +80,8 @@ def analyze_evidence_sufficiency(state: ResearchState) -> dict[str, Any]:
         try:
             prompt = SUFFICIENCY_PROMPT.format(query=query, plan=json.dumps(plan), evidence=evidence_text)
             raw = _call_groq_raw(prompt)
-            match = re.search(r'\{.*\}', raw, re.DOTALL)
-            if match:
-                parsed = json.loads(match.group())
+            parsed = extract_json_object(raw)
+            if parsed:
                 gaps = parsed.get("gaps", [])
         except Exception as e:
             print(f"Sufficiency analysis failed: {e}")
@@ -103,9 +102,8 @@ def generate_adaptive_queries(state: ResearchState) -> dict[str, Any]:
         try:
             prompt = ADAPTIVE_QUERY_PROMPT.format(query=query, gaps=json.dumps(gaps))
             raw = _call_groq_raw(prompt)
-            match = re.search(r'\{.*\}', raw, re.DOTALL)
-            if match:
-                parsed = json.loads(match.group())
+            parsed = extract_json_object(raw)
+            if parsed:
                 new_queries = parsed.get("queries", [])
         except Exception:
             pass
@@ -150,9 +148,8 @@ def cross_paper_analysis(state: ResearchState) -> dict[str, Any]:
         try:
             prompt = CROSS_PAPER_PROMPT.format(query=query, evidence=evidence_text)
             raw = _call_groq_raw(prompt)
-            match = re.search(r'\{.*\}', raw, re.DOTALL)
-            if match:
-                parsed = json.loads(match.group())
+            parsed = extract_json_object(raw)
+            if parsed:
                 similarities = parsed.get("similarities", [])
                 differences = parsed.get("differences", [])
                 contradictions = parsed.get("contradictions", [])

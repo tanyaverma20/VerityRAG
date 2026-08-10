@@ -151,16 +151,18 @@ vector store; no streaming token-by-token output.
 
 
 # ---------------------------------------------------------------------------
-# Shared JSON-extraction helper
+# Shared JSON-extraction helper — delegates to json_extract.py's robust
+# implementation (handles a reasoning model's <think> preamble containing
+# unrelated LaTeX-style curly braces, and JSON wrapped in a markdown code
+# fence — both confirmed as real failure modes of the naive
+# first-brace-to-last-brace regex this used to be; see json_extract.py's
+# own docstring for the full story). Kept as a same-named local wrapper
+# rather than renaming it everywhere, so all 11 call sites in this file are
+# fixed by this one change.
 # ---------------------------------------------------------------------------
 def _extract_json_object(raw: str) -> dict | None:
-    match = re.search(r"\{.*\}", raw, re.DOTALL)
-    if not match:
-        return None
-    try:
-        return json.loads(match.group())
-    except Exception:
-        return None
+    from json_extract import extract_json_object
+    return extract_json_object(raw)
 
 
 # ---------------------------------------------------------------------------

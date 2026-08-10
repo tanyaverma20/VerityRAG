@@ -36,6 +36,20 @@ MAX_CHUNKS_PER_DOC = 3     # max chunks per document in final selection (diversi
 # comparison answer while staying a bounded, controlled output cap.
 MAX_ANSWER_TOKENS = int(os.getenv("MAX_ANSWER_TOKENS", "1024"))
 
+# Explain Figure's vision call gets its OWN, larger budget. Confirmed via a
+# real end-to-end test against a real configured vision-capable model
+# (Phase 15 vision verification): a reasoning-style vision model can spend
+# several hundred tokens on internal <think>...</think> reasoning about a
+# genuinely complex multimodal prompt (describing an architecture diagram's
+# components/layout, not just answering a short factual question) before
+# ever emitting the actual JSON answer — MAX_ANSWER_TOKENS (1024) was
+# repeatedly observed to truncate the response mid-reasoning, before any
+# JSON appeared at all, silently degrading every vision call to the
+# text-only fallback. Still a bounded, controlled cap, just sized for this
+# specific call's real observed behavior rather than reused from the
+# text-only synthesis path.
+MAX_VISION_ANSWER_TOKENS = int(os.getenv("MAX_VISION_ANSWER_TOKENS", "4096"))
+
 # Report generation (deterministic retrieval, still ONE LLM call). A report
 # needs broader per-document coverage than a single Q&A answer, so these are
 # intentionally larger than RERANK_TOP_K/MAX_CONTEXT_TOKENS/MAX_CHUNKS_PER_DOC
@@ -51,3 +65,11 @@ MAX_REPORT_ANSWER_TOKENS = int(os.getenv("MAX_REPORT_ANSWER_TOKENS", "2048"))
 DEEP_RESEARCH_MAX_ITERATIONS = int(os.getenv("DEEP_RESEARCH_MAX_ITERATIONS", "3"))
 DEEP_RESEARCH_MAX_LLM_CALLS = int(os.getenv("DEEP_RESEARCH_MAX_LLM_CALLS", "12"))
 DEEP_RESEARCH_MAX_RETRIES = int(os.getenv("DEEP_RESEARCH_MAX_RETRIES", "1"))
+
+# Upload size cap (Phase 13 security audit finding: /upload previously had
+# no size limit at all — an unbounded upload could exhaust disk/memory).
+# 50 MB is generous for a real academic paper (even ones with many figures)
+# while bounding the worst case. Enforced in main.py:upload_document() by
+# counting bytes while streaming to the temp file, not by trusting a
+# client-supplied Content-Length header.
+MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(50 * 1024 * 1024)))
