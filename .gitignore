@@ -52,3 +52,6 @@ backend/temp_chroma/
 
 # Registry / task DB (runtime state, not source)
 data/registry.db
+
+# Redis local dump (if a local redis-server is ever run from this repo dir)
+dump.rdb

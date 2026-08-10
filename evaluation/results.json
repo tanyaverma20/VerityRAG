@@ -1,0 +1,1583 @@
+{
+  "meta": {
+    "generated_at_utc": "2026-08-10T15:08:07Z",
+    "dataset": "10 original isolated benchmark documents (evaluation/benchmark_corpus.py) \u2014 NOT scraped/real research papers; hand-authored, non-overlapping technical text so retrieval correctness is independently verifiable.",
+    "dataset_size_documents": 10,
+    "dataset_size_questions": 20,
+    "isolated_chroma_dir": "C:\\Users\\TANYAV~1\\AppData\\Local\\Temp\\verityrag_benchmark_chroma_5r2tdcur",
+    "isolated_collection_name": "benchmark_collection",
+    "production_chroma_touched": false,
+    "llm_calls_made": 0,
+    "environment": {
+      "python_version": "3.13.5",
+      "platform": "Windows-11-10.0.26200-SP0",
+      "cpu": "AMD64 Family 25 Model 80 Stepping 0, AuthenticAMD",
+      "cpu_count": 12,
+      "chromadb_version": "1.5.9",
+      "sqlalchemy_version": "2.0.51",
+      "hardware_note": "Local development machine, CPU-only inference (no GPU used for embeddings/reranking)."
+    },
+    "config": {
+      "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+      "reranker_model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "rrf_k": 60
+    }
+  },
+  "resource_usage": {
+    "process_rss_mb_before": 477.6,
+    "process_rss_mb_after": 775.0,
+    "process_rss_mb_delta": 297.4
+  },
+  "A_indexing": {
+    "documents_ingested": 10,
+    "unique_document_ids": true,
+    "total_chunks_indexed": 30,
+    "chroma_collection_count_matches": true,
+    "cross_document_contamination_found": false,
+    "mean_index_time_ms": 57.45,
+    "total_index_time_ms": 574.49
+  },
+  "B_D_retrieval_and_isolation": {
+    "single_document": [
+      {
+        "doc_key": "transformers",
+        "question": "How is scaled dot-product attention computed?",
+        "chunks_returned": 3,
+        "isolated_correctly": true,
+        "total_latency_ms": 75.491
+      },
+      {
+        "doc_key": "transformers",
+        "question": "Why is positional encoding needed in a Transformer?",
+        "chunks_returned": 3,
+        "isolated_correctly": true,
+        "total_latency_ms": 71.463
+      },
+      {
+        "doc_key": "cnn",
+        "question": "What does a max pooling layer do?",
+        "chunks_returned": 3,
+        "isolated_correctly": true,
+        "total_latency_ms": 58.357
+      },
+      {
+        "doc_key": "cnn",
+        "question": "What dataset was used to train deep convolutional networks for image classification?",
+        "chunks_returned": 3,
+        "isolated_correctly": true,
+        "total_latency_ms": 58.862
+      },
+      {
+        "doc_key": "rl",
+        "question": "What is the Q-learning update rule?",
+        "chunks_returned": 3,
+        "isolated_correctly": true,
+        "total_latency_ms": 76.259
+      },
+      {
+        "doc_key": "rl",
+        "question": "What does an epsilon-greedy policy do?",
+        "chunks_returned": 3,
+        "isolated_correctly": true,
+        "total_latency_ms": 66.559
+      },
+      {
+        "doc_key": "db_indexing",
+        "question": "What data structure do relational database indexes typically use?",
+        "chunks_returned": 3,
+        "isolated_correctly": true,
+        "total_latency_ms": 56.127
+      },
+      {
+        "doc_key": "db_indexing",
+        "question": "What is the downside of adding more indexes to a table?",
+        "chunks_returned": 3,
+        "isolated_correctly": true,
+        "total_latency_ms": 55.847
+      },
+      {
+        "doc_key": "os_scheduling",
+        "question": "What problem does aging solve in priority scheduling?",
+        "chunks_returned": 3,
+        "isolated_correctly": true,
+        "total_latency_ms": 56.899
+      },
+      {
+        "doc_key": "os_scheduling",
+        "question": "What is a time quantum in round-robin scheduling?",
+        "chunks_returned": 3,
+        "isolated_correctly": true,
+        "total_latency_ms": 55.744
+      },
+      {
+        "doc_key": "raft",
+        "question": "How does a Raft candidate get elected leader?",
+        "chunks_returned": 3,
+        "isolated_correctly": true,
+        "total_latency_ms": 61.001
+      },
+      {
+        "doc_key": "raft",
+        "question": "When is a log entry considered committed in Raft?",
+        "chunks_returned": 3,
+        "isolated_correctly": true,
+        "total_latency_ms": 56.613
+      },
+      {
+        "doc_key": "gnn",
+        "question": "How does a node update its representation in a message-passing GNN?",
+        "chunks_returned": 3,
+        "isolated_correctly": true,
+        "total_latency_ms": 61.205
+      },
+      {
+        "doc_key": "gnn",
+        "question": "What is over-smoothing in graph neural networks?",
+        "chunks_returned": 3,
+        "isolated_correctly": true,
+        "total_latency_ms": 60.971
+      },
+      {
+        "doc_key": "federated",
+        "question": "What does the FedAvg algorithm average across devices?",
+        "chunks_returned": 3,
+        "isolated_correctly": true,
+        "total_latency_ms": 56.789
+      },
+      {
+        "doc_key": "federated",
+        "question": "Why can federated learning be slow to converge?",
+        "chunks_returned": 3,
+        "isolated_correctly": true,
+        "total_latency_ms": 52.825
+      },
+      {
+        "doc_key": "compilers",
+        "question": "What does dead code elimination remove?",
+        "chunks_returned": 3,
+        "isolated_correctly": true,
+        "total_latency_ms": 56.284
+      },
+      {
+        "doc_key": "compilers",
+        "question": "How is register allocation modeled as a graph problem?",
+        "chunks_returned": 3,
+        "isolated_correctly": true,
+        "total_latency_ms": 50.488
+      },
+      {
+        "doc_key": "ir_bm25",
+        "question": "What does the parameter b control in BM25?",
+        "chunks_returned": 3,
+        "isolated_correctly": true,
+        "total_latency_ms": 58.332
+      },
+      {
+        "doc_key": "ir_bm25",
+        "question": "Why combine BM25 with dense vector search?",
+        "chunks_returned": 3,
+        "isolated_correctly": true,
+        "total_latency_ms": 55.581
+      }
+    ],
+    "multi_document": [
+      {
+        "targeted_docs": [
+          "transformers",
+          "cnn"
+        ],
+        "chunks_returned": 6,
+        "only_targeted_docs_present": true,
+        "total_latency_ms": 114.956
+      }
+    ],
+    "all_documents": {
+      "chunks_returned": 10,
+      "distinct_documents_represented": 6,
+      "total_latency_ms": 355.525
+    },
+    "isolation_violations": 0
+  },
+  "C_comparison_scaling": {
+    "2_documents": {
+      "documents_requested": 2,
+      "documents_represented_in_final_evidence": 2,
+      "all_documents_represented": true,
+      "total_chunks_selected": 6,
+      "total_latency_ms": 121.09
+    },
+    "5_documents": {
+      "documents_requested": 5,
+      "documents_represented_in_final_evidence": 5,
+      "all_documents_represented": true,
+      "total_chunks_selected": 15,
+      "total_latency_ms": 314.51
+    },
+    "10_documents": {
+      "documents_requested": 10,
+      "documents_represented_in_final_evidence": 10,
+      "all_documents_represented": true,
+      "total_chunks_selected": 30,
+      "total_latency_ms": 572.41
+    }
+  },
+  "E_query_decomposition": {
+    "question": "Compare the methodology and results of these two papers.",
+    "sub_queries_generated": [
+      "methodology: Compare the methodology and results of these two papers.",
+      "results: Compare the methodology and results of these two papers."
+    ],
+    "sub_query_count": 2,
+    "scope_preserved": true,
+    "both_documents_represented": true,
+    "chunks_returned": 6,
+    "total_latency_ms": 133.08
+  },
+  "F_concurrent_retrieval": {
+    "concurrent_queries": 10,
+    "wall_clock_ms": 476.52,
+    "sum_of_individual_latencies_ms": 4422.33,
+    "speedup_factor": 9.28,
+    "all_succeeded": true
+  },
+  "bm25_index_build_ms": 5.88,
+  "latency_distribution": {
+    "trials": 8,
+    "query": "How is scaled dot-product attention computed?",
+    "end_to_end_retrieval": {
+      "mean_ms": 79.003,
+      "median_ms": 78.459,
+      "p95_ms": 82.662,
+      "min_ms": 76.424,
+      "max_ms": 82.662
+    },
+    "dense_search": {
+      "mean_ms": 16.173,
+      "median_ms": 15.665,
+      "p95_ms": 17.996,
+      "min_ms": 14.703,
+      "max_ms": 17.996
+    },
+    "bm25_search": {
+      "mean_ms": 0.264,
+      "median_ms": 0.275,
+      "p95_ms": 0.303,
+      "min_ms": 0.199,
+      "max_ms": 0.303
+    },
+    "cross_encoder_rerank": {
+      "mean_ms": 58.959,
+      "median_ms": 58.853,
+      "p95_ms": 62.023,
+      "min_ms": 56.977,
+      "max_ms": 62.023
+    }
+  },
+  "baseline_vs_hybrid_retrieval_evaluation": {
+    "k_values": [
+      1,
+      3,
+      5
+    ],
+    "questions_evaluated": 20,
+    "baseline_dense_only_summary": {
+      "avg_latency_ms": 15.153,
+      "avg_metrics": {
+        "recall@1": 1.0,
+        "precision@1": 1.0,
+        "hit_rate@1": 1.0,
+        "ndcg@1": 1.0,
+        "recall@3": 1.0,
+        "precision@3": 0.3333,
+        "hit_rate@3": 1.0,
+        "ndcg@3": 1.0,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "hit_rate@5": 1.0,
+        "ndcg@5": 1.0,
+        "mrr": 1.0,
+        "retrieved_count": 5.45,
+        "relevant_count": 1
+      }
+    },
+    "verityrag_hybrid_summary": {
+      "avg_latency_ms": 382.289,
+      "avg_metrics": {
+        "recall@1": 1.0,
+        "precision@1": 1.0,
+        "hit_rate@1": 1.0,
+        "ndcg@1": 1.0,
+        "recall@3": 1.0,
+        "precision@3": 0.3333,
+        "hit_rate@3": 1.0,
+        "ndcg@3": 1.0,
+        "recall@5": 1.0,
+        "precision@5": 0.2,
+        "hit_rate@5": 1.0,
+        "ndcg@5": 1.0,
+        "mrr": 1.0,
+        "retrieved_count": 6.15,
+        "relevant_count": 1
+      }
+    },
+    "per_question_results": [
+      {
+        "doc_key": "transformers",
+        "question": "How is scaled dot-product attention computed?",
+        "relevant_document_ids": [
+          "4c289170af5b42cc"
+        ],
+        "baseline_dense_only": {
+          "retrieved_document_ids": [
+            "4c289170af5b42cc",
+            "c4a2d2ca48c84481",
+            "d78dca6ca2be7f32",
+            "6576b9dc632c8ece",
+            "e1307fc3c351421f",
+            "f62eea83f85e6365"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 6,
+            "relevant_count": 1
+          },
+          "latency_ms": 14.216
+        },
+        "verityrag_hybrid": {
+          "retrieved_document_ids": [
+            "4c289170af5b42cc",
+            "c4a2d2ca48c84481",
+            "e1307fc3c351421f",
+            "6576b9dc632c8ece",
+            "18f7da30b8875e3f",
+            "671e3ad0209c2d26",
+            "d78dca6ca2be7f32"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 7,
+            "relevant_count": 1
+          },
+          "latency_ms": 427.561
+        }
+      },
+      {
+        "doc_key": "transformers",
+        "question": "Why is positional encoding needed in a Transformer?",
+        "relevant_document_ids": [
+          "4c289170af5b42cc"
+        ],
+        "baseline_dense_only": {
+          "retrieved_document_ids": [
+            "4c289170af5b42cc",
+            "f62eea83f85e6365",
+            "c4a2d2ca48c84481",
+            "671e3ad0209c2d26",
+            "d78dca6ca2be7f32"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 5,
+            "relevant_count": 1
+          },
+          "latency_ms": 14.098
+        },
+        "verityrag_hybrid": {
+          "retrieved_document_ids": [
+            "4c289170af5b42cc",
+            "c4a2d2ca48c84481",
+            "d78dca6ca2be7f32",
+            "f62eea83f85e6365",
+            "671e3ad0209c2d26",
+            "e64c9c937173a78b"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 6,
+            "relevant_count": 1
+          },
+          "latency_ms": 410.791
+        }
+      },
+      {
+        "doc_key": "cnn",
+        "question": "What does a max pooling layer do?",
+        "relevant_document_ids": [
+          "c4a2d2ca48c84481"
+        ],
+        "baseline_dense_only": {
+          "retrieved_document_ids": [
+            "c4a2d2ca48c84481",
+            "d78dca6ca2be7f32",
+            "f62eea83f85e6365",
+            "e64c9c937173a78b",
+            "671e3ad0209c2d26",
+            "18f7da30b8875e3f"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 6,
+            "relevant_count": 1
+          },
+          "latency_ms": 13.608
+        },
+        "verityrag_hybrid": {
+          "retrieved_document_ids": [
+            "c4a2d2ca48c84481",
+            "d78dca6ca2be7f32",
+            "f62eea83f85e6365",
+            "5bfb3fd196dd19f0",
+            "4c289170af5b42cc",
+            "e64c9c937173a78b",
+            "671e3ad0209c2d26"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 7,
+            "relevant_count": 1
+          },
+          "latency_ms": 381.968
+        }
+      },
+      {
+        "doc_key": "cnn",
+        "question": "What dataset was used to train deep convolutional networks for image classification?",
+        "relevant_document_ids": [
+          "c4a2d2ca48c84481"
+        ],
+        "baseline_dense_only": {
+          "retrieved_document_ids": [
+            "c4a2d2ca48c84481",
+            "d78dca6ca2be7f32",
+            "4c289170af5b42cc",
+            "e1307fc3c351421f"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 4,
+            "relevant_count": 1
+          },
+          "latency_ms": 16.34
+        },
+        "verityrag_hybrid": {
+          "retrieved_document_ids": [
+            "c4a2d2ca48c84481",
+            "d78dca6ca2be7f32",
+            "4c289170af5b42cc",
+            "e1307fc3c351421f",
+            "6576b9dc632c8ece"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 5,
+            "relevant_count": 1
+          },
+          "latency_ms": 416.197
+        }
+      },
+      {
+        "doc_key": "rl",
+        "question": "What is the Q-learning update rule?",
+        "relevant_document_ids": [
+          "18f7da30b8875e3f"
+        ],
+        "baseline_dense_only": {
+          "retrieved_document_ids": [
+            "18f7da30b8875e3f",
+            "e1307fc3c351421f",
+            "4c289170af5b42cc",
+            "e64c9c937173a78b",
+            "d78dca6ca2be7f32",
+            "c4a2d2ca48c84481",
+            "6576b9dc632c8ece"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 7,
+            "relevant_count": 1
+          },
+          "latency_ms": 13.781
+        },
+        "verityrag_hybrid": {
+          "retrieved_document_ids": [
+            "18f7da30b8875e3f",
+            "e1307fc3c351421f",
+            "4c289170af5b42cc",
+            "671e3ad0209c2d26",
+            "c4a2d2ca48c84481",
+            "d78dca6ca2be7f32",
+            "5bfb3fd196dd19f0",
+            "f62eea83f85e6365"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 8,
+            "relevant_count": 1
+          },
+          "latency_ms": 339.433
+        }
+      },
+      {
+        "doc_key": "rl",
+        "question": "What does an epsilon-greedy policy do?",
+        "relevant_document_ids": [
+          "18f7da30b8875e3f"
+        ],
+        "baseline_dense_only": {
+          "retrieved_document_ids": [
+            "18f7da30b8875e3f",
+            "e64c9c937173a78b",
+            "5bfb3fd196dd19f0",
+            "e1307fc3c351421f",
+            "f62eea83f85e6365"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 5,
+            "relevant_count": 1
+          },
+          "latency_ms": 13.35
+        },
+        "verityrag_hybrid": {
+          "retrieved_document_ids": [
+            "18f7da30b8875e3f",
+            "5bfb3fd196dd19f0",
+            "e64c9c937173a78b",
+            "f62eea83f85e6365",
+            "e1307fc3c351421f",
+            "d78dca6ca2be7f32"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 6,
+            "relevant_count": 1
+          },
+          "latency_ms": 357.864
+        }
+      },
+      {
+        "doc_key": "db_indexing",
+        "question": "What data structure do relational database indexes typically use?",
+        "relevant_document_ids": [
+          "671e3ad0209c2d26"
+        ],
+        "baseline_dense_only": {
+          "retrieved_document_ids": [
+            "671e3ad0209c2d26",
+            "6576b9dc632c8ece",
+            "d78dca6ca2be7f32",
+            "5bfb3fd196dd19f0",
+            "f62eea83f85e6365",
+            "4c289170af5b42cc"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 6,
+            "relevant_count": 1
+          },
+          "latency_ms": 12.722
+        },
+        "verityrag_hybrid": {
+          "retrieved_document_ids": [
+            "671e3ad0209c2d26",
+            "d78dca6ca2be7f32",
+            "f62eea83f85e6365",
+            "6576b9dc632c8ece",
+            "5bfb3fd196dd19f0",
+            "e1307fc3c351421f"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 6,
+            "relevant_count": 1
+          },
+          "latency_ms": 329.973
+        }
+      },
+      {
+        "doc_key": "db_indexing",
+        "question": "What is the downside of adding more indexes to a table?",
+        "relevant_document_ids": [
+          "671e3ad0209c2d26"
+        ],
+        "baseline_dense_only": {
+          "retrieved_document_ids": [
+            "671e3ad0209c2d26",
+            "5bfb3fd196dd19f0",
+            "c4a2d2ca48c84481",
+            "e1307fc3c351421f",
+            "6576b9dc632c8ece",
+            "f62eea83f85e6365"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 6,
+            "relevant_count": 1
+          },
+          "latency_ms": 15.352
+        },
+        "verityrag_hybrid": {
+          "retrieved_document_ids": [
+            "671e3ad0209c2d26",
+            "5bfb3fd196dd19f0",
+            "c4a2d2ca48c84481",
+            "6576b9dc632c8ece",
+            "f62eea83f85e6365"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 5,
+            "relevant_count": 1
+          },
+          "latency_ms": 412.257
+        }
+      },
+      {
+        "doc_key": "os_scheduling",
+        "question": "What problem does aging solve in priority scheduling?",
+        "relevant_document_ids": [
+          "e64c9c937173a78b"
+        ],
+        "baseline_dense_only": {
+          "retrieved_document_ids": [
+            "e64c9c937173a78b",
+            "f62eea83f85e6365",
+            "18f7da30b8875e3f",
+            "5bfb3fd196dd19f0",
+            "e1307fc3c351421f"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 5,
+            "relevant_count": 1
+          },
+          "latency_ms": 16.163
+        },
+        "verityrag_hybrid": {
+          "retrieved_document_ids": [
+            "e64c9c937173a78b",
+            "18f7da30b8875e3f",
+            "f62eea83f85e6365",
+            "e1307fc3c351421f",
+            "671e3ad0209c2d26",
+            "5bfb3fd196dd19f0",
+            "4c289170af5b42cc"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 7,
+            "relevant_count": 1
+          },
+          "latency_ms": 394.451
+        }
+      },
+      {
+        "doc_key": "os_scheduling",
+        "question": "What is a time quantum in round-robin scheduling?",
+        "relevant_document_ids": [
+          "e64c9c937173a78b"
+        ],
+        "baseline_dense_only": {
+          "retrieved_document_ids": [
+            "e64c9c937173a78b",
+            "18f7da30b8875e3f",
+            "5bfb3fd196dd19f0",
+            "f62eea83f85e6365",
+            "e1307fc3c351421f"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 5,
+            "relevant_count": 1
+          },
+          "latency_ms": 14.577
+        },
+        "verityrag_hybrid": {
+          "retrieved_document_ids": [
+            "e64c9c937173a78b",
+            "e1307fc3c351421f",
+            "f62eea83f85e6365",
+            "5bfb3fd196dd19f0",
+            "18f7da30b8875e3f",
+            "6576b9dc632c8ece",
+            "4c289170af5b42cc"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 7,
+            "relevant_count": 1
+          },
+          "latency_ms": 380.775
+        }
+      },
+      {
+        "doc_key": "raft",
+        "question": "How does a Raft candidate get elected leader?",
+        "relevant_document_ids": [
+          "5bfb3fd196dd19f0"
+        ],
+        "baseline_dense_only": {
+          "retrieved_document_ids": [
+            "5bfb3fd196dd19f0",
+            "18f7da30b8875e3f",
+            "e64c9c937173a78b",
+            "671e3ad0209c2d26",
+            "f62eea83f85e6365"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 5,
+            "relevant_count": 1
+          },
+          "latency_ms": 15.114
+        },
+        "verityrag_hybrid": {
+          "retrieved_document_ids": [
+            "5bfb3fd196dd19f0",
+            "6576b9dc632c8ece",
+            "18f7da30b8875e3f",
+            "c4a2d2ca48c84481",
+            "4c289170af5b42cc",
+            "e64c9c937173a78b",
+            "d78dca6ca2be7f32",
+            "671e3ad0209c2d26"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 8,
+            "relevant_count": 1
+          },
+          "latency_ms": 379.695
+        }
+      },
+      {
+        "doc_key": "raft",
+        "question": "When is a log entry considered committed in Raft?",
+        "relevant_document_ids": [
+          "5bfb3fd196dd19f0"
+        ],
+        "baseline_dense_only": {
+          "retrieved_document_ids": [
+            "5bfb3fd196dd19f0",
+            "671e3ad0209c2d26",
+            "18f7da30b8875e3f",
+            "e64c9c937173a78b",
+            "f62eea83f85e6365"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 5,
+            "relevant_count": 1
+          },
+          "latency_ms": 14.538
+        },
+        "verityrag_hybrid": {
+          "retrieved_document_ids": [
+            "5bfb3fd196dd19f0",
+            "671e3ad0209c2d26",
+            "18f7da30b8875e3f",
+            "6576b9dc632c8ece",
+            "4c289170af5b42cc"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 5,
+            "relevant_count": 1
+          },
+          "latency_ms": 351.876
+        }
+      },
+      {
+        "doc_key": "gnn",
+        "question": "How does a node update its representation in a message-passing GNN?",
+        "relevant_document_ids": [
+          "d78dca6ca2be7f32"
+        ],
+        "baseline_dense_only": {
+          "retrieved_document_ids": [
+            "d78dca6ca2be7f32",
+            "c4a2d2ca48c84481",
+            "5bfb3fd196dd19f0",
+            "4c289170af5b42cc",
+            "e1307fc3c351421f"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 5,
+            "relevant_count": 1
+          },
+          "latency_ms": 15.623
+        },
+        "verityrag_hybrid": {
+          "retrieved_document_ids": [
+            "d78dca6ca2be7f32",
+            "f62eea83f85e6365",
+            "671e3ad0209c2d26",
+            "18f7da30b8875e3f",
+            "5bfb3fd196dd19f0",
+            "e1307fc3c351421f",
+            "4c289170af5b42cc"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 7,
+            "relevant_count": 1
+          },
+          "latency_ms": 420.814
+        }
+      },
+      {
+        "doc_key": "gnn",
+        "question": "What is over-smoothing in graph neural networks?",
+        "relevant_document_ids": [
+          "d78dca6ca2be7f32"
+        ],
+        "baseline_dense_only": {
+          "retrieved_document_ids": [
+            "d78dca6ca2be7f32",
+            "c4a2d2ca48c84481",
+            "e1307fc3c351421f",
+            "18f7da30b8875e3f",
+            "4c289170af5b42cc"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 5,
+            "relevant_count": 1
+          },
+          "latency_ms": 13.897
+        },
+        "verityrag_hybrid": {
+          "retrieved_document_ids": [
+            "d78dca6ca2be7f32",
+            "c4a2d2ca48c84481",
+            "f62eea83f85e6365",
+            "4c289170af5b42cc",
+            "e1307fc3c351421f"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 5,
+            "relevant_count": 1
+          },
+          "latency_ms": 398.049
+        }
+      },
+      {
+        "doc_key": "federated",
+        "question": "What does the FedAvg algorithm average across devices?",
+        "relevant_document_ids": [
+          "e1307fc3c351421f"
+        ],
+        "baseline_dense_only": {
+          "retrieved_document_ids": [
+            "e1307fc3c351421f",
+            "d78dca6ca2be7f32",
+            "18f7da30b8875e3f",
+            "c4a2d2ca48c84481",
+            "6576b9dc632c8ece",
+            "5bfb3fd196dd19f0",
+            "4c289170af5b42cc"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 7,
+            "relevant_count": 1
+          },
+          "latency_ms": 14.283
+        },
+        "verityrag_hybrid": {
+          "retrieved_document_ids": [
+            "e1307fc3c351421f",
+            "c4a2d2ca48c84481",
+            "d78dca6ca2be7f32",
+            "6576b9dc632c8ece",
+            "4c289170af5b42cc"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 5,
+            "relevant_count": 1
+          },
+          "latency_ms": 376.023
+        }
+      },
+      {
+        "doc_key": "federated",
+        "question": "Why can federated learning be slow to converge?",
+        "relevant_document_ids": [
+          "e1307fc3c351421f"
+        ],
+        "baseline_dense_only": {
+          "retrieved_document_ids": [
+            "e1307fc3c351421f",
+            "18f7da30b8875e3f",
+            "4c289170af5b42cc",
+            "c4a2d2ca48c84481",
+            "d78dca6ca2be7f32",
+            "6576b9dc632c8ece"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 6,
+            "relevant_count": 1
+          },
+          "latency_ms": 17.101
+        },
+        "verityrag_hybrid": {
+          "retrieved_document_ids": [
+            "e1307fc3c351421f",
+            "18f7da30b8875e3f",
+            "4c289170af5b42cc",
+            "c4a2d2ca48c84481",
+            "d78dca6ca2be7f32"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 5,
+            "relevant_count": 1
+          },
+          "latency_ms": 390.537
+        }
+      },
+      {
+        "doc_key": "compilers",
+        "question": "What does dead code elimination remove?",
+        "relevant_document_ids": [
+          "f62eea83f85e6365"
+        ],
+        "baseline_dense_only": {
+          "retrieved_document_ids": [
+            "f62eea83f85e6365",
+            "e64c9c937173a78b",
+            "5bfb3fd196dd19f0",
+            "d78dca6ca2be7f32",
+            "671e3ad0209c2d26"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 5,
+            "relevant_count": 1
+          },
+          "latency_ms": 15.263
+        },
+        "verityrag_hybrid": {
+          "retrieved_document_ids": [
+            "f62eea83f85e6365",
+            "671e3ad0209c2d26",
+            "c4a2d2ca48c84481",
+            "5bfb3fd196dd19f0",
+            "e64c9c937173a78b",
+            "d78dca6ca2be7f32"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 6,
+            "relevant_count": 1
+          },
+          "latency_ms": 292.342
+        }
+      },
+      {
+        "doc_key": "compilers",
+        "question": "How is register allocation modeled as a graph problem?",
+        "relevant_document_ids": [
+          "f62eea83f85e6365"
+        ],
+        "baseline_dense_only": {
+          "retrieved_document_ids": [
+            "f62eea83f85e6365",
+            "d78dca6ca2be7f32",
+            "e64c9c937173a78b",
+            "e1307fc3c351421f",
+            "5bfb3fd196dd19f0"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 5,
+            "relevant_count": 1
+          },
+          "latency_ms": 13.473
+        },
+        "verityrag_hybrid": {
+          "retrieved_document_ids": [
+            "f62eea83f85e6365",
+            "d78dca6ca2be7f32",
+            "4c289170af5b42cc",
+            "18f7da30b8875e3f",
+            "e1307fc3c351421f",
+            "6576b9dc632c8ece",
+            "c4a2d2ca48c84481",
+            "671e3ad0209c2d26"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 8,
+            "relevant_count": 1
+          },
+          "latency_ms": 371.646
+        }
+      },
+      {
+        "doc_key": "ir_bm25",
+        "question": "What does the parameter b control in BM25?",
+        "relevant_document_ids": [
+          "6576b9dc632c8ece"
+        ],
+        "baseline_dense_only": {
+          "retrieved_document_ids": [
+            "6576b9dc632c8ece",
+            "671e3ad0209c2d26",
+            "f62eea83f85e6365",
+            "18f7da30b8875e3f",
+            "4c289170af5b42cc",
+            "5bfb3fd196dd19f0"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 6,
+            "relevant_count": 1
+          },
+          "latency_ms": 20.333
+        },
+        "verityrag_hybrid": {
+          "retrieved_document_ids": [
+            "6576b9dc632c8ece",
+            "671e3ad0209c2d26",
+            "f62eea83f85e6365",
+            "c4a2d2ca48c84481",
+            "4c289170af5b42cc"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 5,
+            "relevant_count": 1
+          },
+          "latency_ms": 450.786
+        }
+      },
+      {
+        "doc_key": "ir_bm25",
+        "question": "Why combine BM25 with dense vector search?",
+        "relevant_document_ids": [
+          "6576b9dc632c8ece"
+        ],
+        "baseline_dense_only": {
+          "retrieved_document_ids": [
+            "6576b9dc632c8ece",
+            "671e3ad0209c2d26",
+            "4c289170af5b42cc",
+            "18f7da30b8875e3f",
+            "d78dca6ca2be7f32"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 5,
+            "relevant_count": 1
+          },
+          "latency_ms": 19.226
+        },
+        "verityrag_hybrid": {
+          "retrieved_document_ids": [
+            "6576b9dc632c8ece",
+            "671e3ad0209c2d26",
+            "d78dca6ca2be7f32",
+            "4c289170af5b42cc",
+            "5bfb3fd196dd19f0"
+          ],
+          "metrics": {
+            "recall@1": 1.0,
+            "precision@1": 1.0,
+            "hit_rate@1": 1.0,
+            "ndcg@1": 1.0,
+            "recall@3": 1.0,
+            "precision@3": 0.3333,
+            "hit_rate@3": 1.0,
+            "ndcg@3": 1.0,
+            "recall@5": 1.0,
+            "precision@5": 0.2,
+            "hit_rate@5": 1.0,
+            "ndcg@5": 1.0,
+            "mrr": 1.0,
+            "retrieved_count": 5,
+            "relevant_count": 1
+          },
+          "latency_ms": 362.737
+        }
+      }
+    ]
+  },
+  "not_measured_by_this_script": [
+    "groundedness (requires an actual LLM generation call \u2014 see evaluation/README.md and backend/groundedness_eval.py for the separate, offline, opt-in evaluator)",
+    "answer_relevance (same \u2014 requires LLM generation)",
+    "end-to-end LLM latency / tokens-per-query / cache-hit-rate in PRODUCTION (this script never calls Groq; see GET /eval/dashboard's live/runtime section for those, sourced from logs/verityrag_events.jsonl on actual production traffic)"
+  ]
+}

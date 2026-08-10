@@ -37,6 +37,7 @@ Why CrossEncoder AFTER RRF?
 from __future__ import annotations
 
 import contextvars
+import time
 
 from rank_bm25 import BM25Okapi
 from sentence_transformers import CrossEncoder
@@ -59,16 +60,22 @@ _retrieval_stats: contextvars.ContextVar[dict | None] = contextvars.ContextVar("
 
 
 def get_retrieval_stats() -> dict:
-    """Real counts from the most recent retrieve()/retrieve_multi() call on
-    this request's thread: candidates_retrieved (post-RRF fusion, pre-rerank
-    pool size) and reranked_to (final chunk count after budget/truncation).
-    Empty dict if no retrieval has run yet this request."""
+    """Real counts/timings from the most recent retrieve()/retrieve_multi()
+    call on this request's thread: candidates_retrieved (post-RRF fusion,
+    pre-rerank pool size), reranked_to (final chunk count after budget/
+    truncation), and rerank_latency_s (wall-clock time of the CrossEncoder
+    forward pass alone, isolated from dense/BM25/RRF/post-processing) — see
+    observability.py's rerank_latency_s field. Empty dict if no retrieval
+    has run yet this request."""
     stats = _retrieval_stats.get()
     return dict(stats) if stats else {}
 
 
-def _record_retrieval_stats(candidates_retrieved: int, reranked_to: int) -> None:
-    _retrieval_stats.set({"candidates_retrieved": candidates_retrieved, "reranked_to": reranked_to})
+def _record_retrieval_stats(candidates_retrieved: int, reranked_to: int, rerank_latency_s: float | None = None) -> None:
+    _retrieval_stats.set({
+        "candidates_retrieved": candidates_retrieved, "reranked_to": reranked_to,
+        "rerank_latency_s": rerank_latency_s,
+    })
 
 # ---------------------------------------------------------------------------
 # Module-level singletons
@@ -104,13 +111,40 @@ def build_bm25_index() -> None:
 # Individual retrieval strategies
 # ---------------------------------------------------------------------------
 
+def _scope_where_clause(document_ids: list[str] | None, workspace_id: str | None = None) -> dict | None:
+    """
+    Builds the Chroma `where` filter enforcing document/workspace scope
+    directly at the vector layer — a second, independent enforcement point
+    on top of the SQL-layer check main.py's _resolve_document_scope()
+    already does (never relies on the frontend alone).
+
+    workspace_id is OPTIONAL and additive: omitting it preserves the exact
+    existing document_id-only behavior (single-tenant deployments, and
+    every caller that predates workspace support, are unaffected). When a
+    caller does pass it, chunks are required to carry a matching
+    workspace_id in their metadata — chunks ingested before this feature
+    existed (or via a test/legacy path) have no workspace_id tag and will
+    correctly never match a real workspace_id filter, i.e. they're safely
+    excluded rather than silently included.
+    """
+    clauses = []
+    if document_ids:
+        clauses.append({"document_id": {"$eq": document_ids[0]}} if len(document_ids) == 1 else {"document_id": {"$in": document_ids}})
+    if workspace_id:
+        clauses.append({"workspace_id": {"$eq": workspace_id}})
+    if not clauses:
+        return None
+    return clauses[0] if len(clauses) == 1 else {"$and": clauses}
+
+
 def dense_search(
     query: str,
     top_k: int = DENSE_TOP_K,
     document_ids: list[str] | None = None,
+    workspace_id: str | None = None,
 ) -> list[dict]:
     """
-    Query ChromaDB with optional document_ids filter.
+    Query ChromaDB with optional document_ids + workspace_id filters.
 
     Returns list of dicts with keys:
       id, text, metadata, source_method, dense_rank
@@ -120,12 +154,7 @@ def dense_search(
         return []
 
     n = min(top_k, collection.count())
-    where = None
-    if document_ids:
-        if len(document_ids) == 1:
-            where = {"document_id": {"$eq": document_ids[0]}}
-        else:
-            where = {"document_id": {"$in": document_ids}}
+    where = _scope_where_clause(document_ids, workspace_id)
 
     kwargs: dict = {"query_texts": [query], "n_results": n}
     if where:
@@ -151,9 +180,12 @@ def bm25_search(
     query: str,
     top_k: int = BM25_TOP_K,
     document_ids: list[str] | None = None,
+    workspace_id: str | None = None,
 ) -> list[dict]:
     """
-    BM25 keyword search with optional document_ids filter.
+    BM25 keyword search with optional document_ids + workspace_id filters.
+    Same scope semantics as dense_search's _scope_where_clause — workspace_id
+    is additive/optional, never breaking a caller that omits it.
 
     Returns list of dicts with keys:
       id, text, metadata, source_method, bm25_rank
@@ -176,6 +208,13 @@ def bm25_search(
         if document_ids:
             doc_id = chunk.get("metadata", {}).get("document_id", "")
             if doc_id not in document_ids:
+                continue
+        # Apply workspace_id filter if requested — a chunk with no
+        # workspace_id tag (legacy/pre-workspace ingest) never matches a
+        # real workspace_id, so it's safely excluded rather than leaked in.
+        if workspace_id:
+            chunk_ws = chunk.get("metadata", {}).get("workspace_id", "")
+            if chunk_ws != workspace_id:
                 continue
         results.append({
             "id": chunk["id"],
@@ -443,6 +482,7 @@ def retrieve(
     top_k: int = RERANK_TOP_K,
     apply_parent_context: bool = True,
     apply_token_budget: bool = True,
+    workspace_id: str | None = None,
 ) -> list[dict]:
     """
     Full Phase 2 retrieval pipeline.
@@ -455,6 +495,9 @@ def retrieve(
         top_k:                Number of final chunks to return.
         apply_parent_context: If True, expand each chunk with parent-page context.
         apply_token_budget:   If True, apply MAX_CONTEXT_TOKENS greedy selection.
+        workspace_id:         Optional second, independent scope enforcement
+                              point (see _scope_where_clause) — additive on
+                              top of document_ids, never required.
 
     Returns:
         List of result dicts, each containing:
@@ -467,10 +510,10 @@ def retrieve(
     bm25_results: list[dict] = []
 
     if strategy in ("hybrid", "dense"):
-        dense_results = dense_search(query, top_k=DENSE_TOP_K, document_ids=document_ids)
+        dense_results = dense_search(query, top_k=DENSE_TOP_K, document_ids=document_ids, workspace_id=workspace_id)
 
     if strategy in ("hybrid", "bm25"):
-        bm25_results = bm25_search(query, top_k=BM25_TOP_K, document_ids=document_ids)
+        bm25_results = bm25_search(query, top_k=BM25_TOP_K, document_ids=document_ids, workspace_id=workspace_id)
 
     # --- 2. Fuse with RRF (or pass through for single-strategy) ---
     if strategy == "hybrid":
@@ -484,7 +527,9 @@ def retrieve(
         return []
 
     # --- 3. CrossEncoder reranking on fused candidate pool ---
+    _rerank_t0 = time.perf_counter()
     reranked = rerank(query, candidates, top_k=max(top_k * 3, RERANK_TOP_K * 3))
+    rerank_latency_s = round(time.perf_counter() - _rerank_t0, 4)
 
     # --- 4. Parent context expansion ---
     if apply_parent_context:
@@ -498,7 +543,7 @@ def retrieve(
         reranked = select_within_token_budget(reranked, max_per_doc=MAX_CHUNKS_PER_DOC)
 
     final = reranked[:top_k]
-    _record_retrieval_stats(len(candidates), len(final))
+    _record_retrieval_stats(len(candidates), len(final), rerank_latency_s)
     return final
 
 
@@ -514,6 +559,7 @@ def retrieve_multi(
     apply_parent_context: bool = True,
     apply_token_budget: bool = True,
     rerank_query: str | None = None,
+    workspace_id: str | None = None,
 ) -> list[dict]:
     """
     Retrieval for a list of sub-queries produced by deterministic
@@ -542,15 +588,18 @@ def retrieve_multi(
             top_k=top_k,
             apply_parent_context=apply_parent_context,
             apply_token_budget=apply_token_budget,
+            workspace_id=workspace_id,
         )
 
     rerank_query = rerank_query or sub_queries[0]
 
-    # --- 1. Dense + BM25 for EACH sub-query, independently document-scoped ---
+    # --- 1. Dense + BM25 for EACH sub-query, independently document- and
+    #        workspace-scoped (same scope for every sub-query — decomposition
+    #        splits the QUESTION, never the scope) ---
     ranked_lists: list[list[dict]] = []
     for sq in sub_queries:
-        ranked_lists.append(dense_search(sq, top_k=DENSE_TOP_K, document_ids=document_ids))
-        ranked_lists.append(bm25_search(sq, top_k=BM25_TOP_K, document_ids=document_ids))
+        ranked_lists.append(dense_search(sq, top_k=DENSE_TOP_K, document_ids=document_ids, workspace_id=workspace_id))
+        ranked_lists.append(bm25_search(sq, top_k=BM25_TOP_K, document_ids=document_ids, workspace_id=workspace_id))
 
     # --- 2. ONE global RRF fusion pass across every sub-query's results ---
     candidates = reciprocal_rank_fusion(*ranked_lists)
@@ -558,7 +607,9 @@ def retrieve_multi(
         return []
 
     # --- 3. CrossEncoder reranking ONCE, globally, against the real question ---
+    _rerank_t0 = time.perf_counter()
     reranked = rerank(rerank_query, candidates, top_k=max(top_k * 3, RERANK_TOP_K * 3))
+    rerank_latency_s = round(time.perf_counter() - _rerank_t0, 4)
 
     # --- 4. Parent context expansion ---
     if apply_parent_context:
@@ -573,7 +624,7 @@ def retrieve_multi(
         reranked = select_within_token_budget(reranked, max_per_doc=MAX_CHUNKS_PER_DOC)
 
     final = reranked[:top_k]
-    _record_retrieval_stats(len(candidates), len(final))
+    _record_retrieval_stats(len(candidates), len(final), rerank_latency_s)
     return final
 
 

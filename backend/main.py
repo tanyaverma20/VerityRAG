@@ -19,6 +19,7 @@ from analysis import (
     evaluate_paper, find_research_gaps, build_literature_matrix, build_knowledge_graph,
 )
 from doc_titles import resolve_display_title
+from figure_vision import persist_uploaded_pdf, get_uploaded_pdf_path, render_page_as_image_base64, vision_model_available, VISION_MODEL
 from verify import verify_answer
 from llm import call_llm
 from database import (
@@ -27,7 +28,7 @@ from database import (
     add_document_to_collection, remove_document_from_collection, delete_collection,
     create_session, get_session, list_sessions, delete_session, update_session_collection,
     add_message, get_session_messages,
-    create_task, update_task_status, get_task,
+    create_task, update_task_status, get_task, task_belongs_to_workspace,
     create_workspace, get_workspace, list_workspaces, documents_in_workspace,
     update_session_title,
 )
@@ -62,6 +63,10 @@ def _call_observability_fields(request_id: str = "", active_document_count: int 
     """
     log = get_call_log()
     tokens = get_token_totals()
+    # Real reranking-stage latency for THIS request's most recent
+    # retrieve()/retrieve_multi() call (retrieval.py:get_retrieval_stats) —
+    # None if no retrieval ran (e.g. a non-PDF-grounded /analyze mode).
+    retrieval_stats = get_retrieval_stats()
     return {
         "llm_calls": len(log),
         "fallback_triggered": any(c["role"] == "fallback" for c in log),
@@ -74,6 +79,8 @@ def _call_observability_fields(request_id: str = "", active_document_count: int 
             "input_tokens": tokens["input_tokens"],
             "output_tokens": tokens["output_tokens"],
             "total_tokens": tokens["total_tokens"],
+            "rerank_latency_s": retrieval_stats.get("rerank_latency_s"),
+            "candidates_retrieved": retrieval_stats.get("candidates_retrieved"),
         },
     }
 
@@ -139,14 +146,40 @@ def _persist_analysis_turn(session_id: str | None, user_text: str | None, fronte
         print(f"Failed to persist analysis turn: {e}")  # history is best-effort, never blocks the response
 
 
-def _retrieve_for_analysis(query_text: str, document_ids: list[str], top_k: int) -> list[dict]:
+def _retrieve_for_analysis(query_text: str, document_ids: list[str], top_k: int, workspace_id: str | None = None) -> list[dict]:
     """Shared retrieval path for /analyze's PDF-grounded modes: same
     deterministic decomposition + hybrid retrieval + RRF + rerank + token
-    budget as normal queries (retrieval.py) — no LLM calls, no new pipeline."""
+    budget as normal queries (retrieval.py) — no LLM calls, no new pipeline.
+    workspace_id is an optional second, independent scope-enforcement point
+    at the vector layer (see retrieval.py:_scope_where_clause) — additive on
+    top of the document_ids already resolved via _resolve_document_scope."""
     sub_queries = decompose_query_deterministic(query_text)
     if len(sub_queries) > 1:
-        return retrieve_multi(sub_queries, document_ids=document_ids, top_k=top_k, rerank_query=query_text)
-    return retrieve(query_text, strategy="hybrid", document_ids=document_ids, top_k=top_k)
+        return retrieve_multi(sub_queries, document_ids=document_ids, top_k=top_k, rerank_query=query_text, workspace_id=workspace_id)
+    return retrieve(query_text, strategy="hybrid", document_ids=document_ids, top_k=top_k, workspace_id=workspace_id)
+
+
+def _chunk_observability_fields(chunks: list[dict]) -> dict:
+    """Real values for log_query_event()'s retrieved_chunk_count /
+    estimated_context_tokens fields — previously a real, silent gap found
+    during the Phase 9 observability audit: every call site in this file
+    passed selected_evidence_count=len(chunks) but never these two
+    top-level schema fields, so they sat permanently at their 0 default
+    across ALL of main.py's real production events, misleadingly looking
+    like a genuine "zero chunks retrieved" measurement even when evidence
+    clearly existed (selected_evidence_count > 0 in the same event).
+    retrieved_chunk_count == len(chunks) here (not a separate, fabricated
+    number) because at this call layer retrieve()/retrieve_multi() already
+    performs rerank + token-budget selection internally before returning —
+    there's no separate "raw pre-selection" count retained at this point
+    beyond what extra.candidates_retrieved (retrieval.py's own rerank-stage
+    stats) already reports. estimated_context_tokens reuses the exact same
+    token estimator retrieval.py's own budgeting already uses."""
+    from retrieval import _estimate_tokens
+    return {
+        "retrieved_chunk_count": len(chunks),
+        "estimated_context_tokens": _estimate_tokens(_evidence_text_from_chunks(chunks)) if chunks else 0,
+    }
 
 
 def _evidence_text_from_chunks(chunks: list[dict]) -> str:
@@ -222,6 +255,7 @@ class ResearchRequest(BaseModel):
     collection_id: str | None = None
     document_ids: list[str] | None = None
     research_type: str = "deep"
+    workspace_id: str | None = None
 
 class CollectionCreateRequest(BaseModel):
     name: str
@@ -230,6 +264,7 @@ class CollectionCreateRequest(BaseModel):
 
 class ReportRequest(BaseModel):
     document_ids: list[str]
+    workspace_id: str | None = None
     session_id: str | None = None   # when set, persists a history record the same way /query does
 
 class AnalyzeRequest(BaseModel):
@@ -272,6 +307,16 @@ async def upload_document(file: UploadFile = File(...), workspace_id: str | None
         result = ingest_document(tmp_path, original_filename=file.filename, workspace_id=workspace_id)
         build_bm25_index()  # rebuild so the new doc is searchable immediately
         cache.clear_all()   # the workspace changed — stale cached answers/reports must not survive it
+        # Persist the original PDF bytes (data/uploads/<document_id>.pdf) so
+        # Explain Figure can later render an actual page image for it (see
+        # figure_vision.py). Best-effort only — never fails the upload
+        # itself if disk I/O has a problem, since text-based ingestion
+        # already succeeded and is what actually matters.
+        if result.get("status") == "ok" and result.get("document_id"):
+            try:
+                persist_uploaded_pdf(tmp_path, result["document_id"])
+            except Exception as e:
+                print(f"Failed to persist original PDF for visual figure rendering: {e}")
         return result
     finally:
         Path(tmp_path).unlink(missing_ok=True)
@@ -301,18 +346,45 @@ def api_get_workspace(workspace_id: str):
 def api_list_documents(workspace_id: str | None = None):
     return list_documents(workspace_id)
 
+def _reject_if_foreign_workspace(doc: dict, requested_workspace_id: str | None) -> None:
+    """Isolation check (Phase 4 audit): document_id is a deterministic
+    content hash — a client with an identical file (e.g. a well-known
+    public paper) can compute another workspace's document_id without ever
+    having uploaded it themselves. GET/DELETE /documents/{doc_id} previously
+    had NO workspace check at all, so a caller from any workspace could
+    read another workspace's document metadata, or — more seriously —
+    DELETE another workspace's document outright.
+
+    Two independent reasons this stays a no-op (same opt-in, backward-
+    compatible pattern as every other workspace_id check in this API):
+      - the CALLER omitted workspace_id entirely (original unscoped
+        behavior, unchanged), or
+      - the DOCUMENT itself has no workspace_id (legacy/no-workspace
+        upload) — there is no ownership to enforce, exactly like
+        task_belongs_to_workspace() treats a workspace-less task.
+    404, not 403, so a mismatched request can't distinguish "wrong
+    workspace" from "doesn't exist" — same pattern used for /task/{task_id}.
+    """
+    if not requested_workspace_id or not doc.get("workspace_id"):
+        return
+    if doc["workspace_id"] != requested_workspace_id:
+        raise HTTPException(404, "Document not found")
+
+
 @app.get("/documents/{doc_id}")
-def api_get_document(doc_id: str):
+def api_get_document(doc_id: str, workspace_id: str | None = None):
     doc = get_document(doc_id)
     if not doc:
         raise HTTPException(404, "Document not found")
+    _reject_if_foreign_workspace(doc, workspace_id)
     return doc
 
 @app.delete("/documents/{doc_id}")
-def api_delete_document(doc_id: str):
+def api_delete_document(doc_id: str, workspace_id: str | None = None):
     doc = get_document(doc_id)
     if not doc:
         raise HTTPException(404, "Document not found")
+    _reject_if_foreign_workspace(doc, workspace_id)
     delete_document_from_index(doc_id)
     build_bm25_index()
     cache.clear_all()   # removed doc must immediately stop participating — no stale cached answer/report can survive it
@@ -379,9 +451,20 @@ def api_delete_session(session_id: str):
 # --- Task Endpoints ---
 
 @app.get("/task/{task_id}")
-def api_get_task(task_id: str):
+def api_get_task(task_id: str, workspace_id: str | None = None):
     task = get_task(task_id)
     if not task:
+        raise HTTPException(404, "Task not found")
+    # Isolation check (Phase 4 audit): a task created under one workspace
+    # must not be readable by a request claiming a different workspace_id,
+    # even though task_id alone would otherwise be enough. A task created
+    # with no workspace_id at all (legacy/no-workspace callers) has no
+    # ownership to enforce and stays reachable — unchanged pre-existing
+    # behavior, matching every other workspace_id check in this API. 404,
+    # not 403, so a mismatched request can't distinguish "wrong workspace"
+    # from "task doesn't exist" — same pattern documents_in_workspace()
+    # already uses.
+    if workspace_id and not task_belongs_to_workspace(task_id, workspace_id):
         raise HTTPException(404, "Task not found")
     return task
 
@@ -398,14 +481,14 @@ def api_get_logs(
     logs = filter_events(task_id=task_id, session_id=session_id, event_type=event_type, n=limit)
     return logs
 
-def _execute_research_graph(question: str, session_id: str | None, collection_id: str | None, document_ids: list[str] | None, research_type: str, task_id: str | None = None, structured_mode: bool = False):
+def _execute_research_graph(question: str, session_id: str | None, collection_id: str | None, document_ids: list[str] | None, research_type: str, task_id: str | None = None, structured_mode: bool = False, workspace_id: str | None = None):
     from graph.workflow import research_app
 
     # Fresh per-request LLM call log (item 17). Call sites read it back via
     # get_call_log()/_call_observability_fields() after this function returns.
     start_call_tracking()
 
-    target_document_ids = _resolve_document_scope(document_ids, collection_id)
+    target_document_ids = _resolve_document_scope(document_ids, collection_id, workspace_id)
 
     if not target_document_ids:
         # Grounding safety: never fall back to an unscoped search over the
@@ -444,6 +527,7 @@ def _execute_research_graph(question: str, session_id: str | None, collection_id
         "task_id": task_id or "none",
         "chat_history": chat_history,
         "structured_mode": structured_mode,
+        "workspace_id": workspace_id or "",
     }
     
     if task_id:
@@ -469,7 +553,8 @@ def async_research_worker(task_id: str, request: ResearchRequest):
             collection_id=request.collection_id,
             document_ids=request.document_ids,
             research_type=request.research_type,
-            task_id=task_id
+            task_id=task_id,
+            workspace_id=request.workspace_id,
         )
         
         chunks = final_state.get("retrieval_results", [])
@@ -509,6 +594,7 @@ def async_research_worker(task_id: str, request: ResearchRequest):
             documents_searched=len(request.document_ids or []),
             documents_contributing=len(payload.get("documents_found") or []),
             selected_evidence_count=len(chunks),
+            **_chunk_observability_fields(chunks),
             retrieval_latency_s=payload.get("latency_s", 0),
             total_latency_s=payload.get("latency_s", 0),
             research_iterations=payload.get("research_iterations", 1),
@@ -535,7 +621,7 @@ def async_research_worker(task_id: str, request: ResearchRequest):
 @app.post("/research")
 def api_research(request: ResearchRequest, background_tasks: BackgroundTasks):
     task_id = uuid.uuid4().hex[:12]
-    create_task(task_id, request.session_id)
+    create_task(task_id, request.session_id, workspace_id=request.workspace_id)
     background_tasks.add_task(async_research_worker, task_id, request)
     return {"task_id": task_id, "status": "PENDING"}
 @app.post("/query")
@@ -574,7 +660,7 @@ def query(request: QueryRequest):
     # calls, zero retrieval. Any upload/delete clears this entirely (see
     # cache.clear_all() call sites), so a stale answer can never survive a
     # workspace change.
-    cached = cache.get_cached_answer(request.question, target_document_ids, request.research_type, chat_history)
+    cached = cache.get_cached_answer(request.question, target_document_ids, request.research_type, chat_history, workspace_id=request.workspace_id)
     if cached:
         log_query_event(
             query=request.question, research_type=request.research_type,
@@ -593,6 +679,7 @@ def query(request: QueryRequest):
             document_ids=target_document_ids,
             research_type=getattr(request, "research_type", "simple"),
             structured_mode=(getattr(request, "mode", "normal") == "structured"),
+            workspace_id=request.workspace_id,
         )
     except Exception as e:
         # Fallback to Phase 2 retrieval if graph fails
@@ -657,6 +744,7 @@ def query(request: QueryRequest):
             task_status="OK" if not generation_failed else "FAILED",
             errors=["graph_execution_failed_used_legacy_fallback"],
             **_call_observability_fields(request_id, active_document_count),
+            **_chunk_observability_fields(chunks),
         )
         return {
             "answer": generation["text"],
@@ -731,7 +819,7 @@ def query(request: QueryRequest):
     # Only cache a genuine synthesized answer — never a rate-limit/generation
     # failure message (item 13: a retry later should get a real attempt).
     if _is_cacheable_answer(payload["answer"]):
-        cache.set_cached_answer(request.question, target_document_ids, request.research_type, payload, chat_history)
+        cache.set_cached_answer(request.question, target_document_ids, request.research_type, payload, chat_history, workspace_id=request.workspace_id)
 
     log_query_event(
         query=request.question,
@@ -746,6 +834,7 @@ def query(request: QueryRequest):
         confidence=payload.get("confidence", "UNAVAILABLE"),
         task_status="OK",
         **_call_observability_fields(request_id, active_document_count),
+        **_chunk_observability_fields(chunks),
     )
 
     return payload
@@ -762,15 +851,30 @@ def api_generate_report(req: ReportRequest):
     if not req.document_ids:
         raise HTTPException(400, "At least one document is required to generate a report.")
 
+    # Isolation check (Phase 4 audit): unlike /query and /analyze, this
+    # endpoint previously used req.document_ids directly with NO workspace
+    # ownership check at all — a client from any workspace could generate
+    # (and read back, via the deterministic cache key) a comparative report
+    # over document_ids it never actually uploaded, as long as it could
+    # guess/learn those content-hash IDs. _resolve_document_scope() applies
+    # the same data-layer filter /query and /analyze already use: when
+    # workspace_id is supplied, only document_ids that actually belong to
+    # it survive; omitting workspace_id keeps the original unscoped
+    # behavior (backward compatible, same opt-in pattern used everywhere
+    # else in this API).
+    target_document_ids = _resolve_document_scope(req.document_ids, None, req.workspace_id)
+    if not target_document_ids:
+        return {"ok": False, "error": NO_DOCUMENTS_MESSAGE, "report_id": None}
+
     request_id = _new_request_id()
-    active_document_count = len(req.document_ids)
+    active_document_count = len(target_document_ids)
     start_call_tracking()
     start = time.time()
 
-    cached = cache.get_cached_report(req.document_ids)
+    cached = cache.get_cached_report(target_document_ids, workspace_id=req.workspace_id)
     if cached:
         log_query_event(
-            query="[report]", documents_searched=len(req.document_ids),
+            query="[report]", documents_searched=active_document_count,
             total_latency_s=round(time.time() - start, 3), task_status="CACHE_HIT",
             llm_calls=0, model_name=GROQ_MODEL,
             extra={"request_id": request_id, "active_document_count": active_document_count, "cache_hit": True},
@@ -779,11 +883,11 @@ def api_generate_report(req: ReportRequest):
         _persist_analysis_turn(req.session_id, None, "report", cached_payload.get("title") or "Comparison report", {"report": cached_payload})
         return cached_payload
 
-    result = generate_report(req.document_ids)  # <-- the ONE LLM call, internally
+    result = generate_report(target_document_ids)  # <-- the ONE LLM call, internally
 
     if not result["ok"]:
         log_query_event(
-            query="[report]", documents_searched=len(req.document_ids),
+            query="[report]", documents_searched=active_document_count,
             total_latency_s=round(time.time() - start, 3), task_status="FAILED",
             errors=[result["error"]], **_call_observability_fields(request_id, active_document_count),
         )
@@ -801,7 +905,7 @@ def api_generate_report(req: ReportRequest):
         "evidence_sufficient": report.evidence_sufficient,
         "documents_found": len({c["document_id"] for c in result["citations"]}),
     }
-    report_id = cache.set_cached_report(req.document_ids, payload)
+    report_id = cache.set_cached_report(target_document_ids, payload, workspace_id=req.workspace_id)
     stored = cache.get_report_by_id(report_id)
     stored["report_id"] = report_id  # patch in place so future cache hits already carry it
 
@@ -903,7 +1007,7 @@ def api_analyze(req: AnalyzeRequest):
         if req.mode in ("viva", "mock_test"):
             query_text = "key concepts, methodology, architecture, datasets, results, contributions, limitations"
             top_k = min(15, REPORT_CHUNKS_PER_DOC * max(len(target_document_ids), 1))
-            chunks = _retrieve_for_analysis(query_text, target_document_ids, top_k)
+            chunks = _retrieve_for_analysis(query_text, target_document_ids, top_k, workspace_id=req.workspace_id)
             if not chunks:
                 return {"ok": False, "mode": req.mode, "error": INSUFFICIENT_EVIDENCE_MESSAGE}
             evidence_text = _evidence_text_from_chunks(chunks)
@@ -913,7 +1017,7 @@ def api_analyze(req: AnalyzeRequest):
             if result is None:
                 log_query_event(query=f"[analyze:{req.mode}]", documents_searched=active_document_count, total_latency_s=round(time.time() - start, 3), task_status="FAILED", **_call_observability_fields(request_id, active_document_count))
                 return {"ok": False, "mode": req.mode, "error": GENERATION_FAILED_MESSAGE}
-            log_query_event(query=f"[analyze:{req.mode}]", documents_searched=active_document_count, documents_contributing=len(documents_found), selected_evidence_count=len(chunks), total_latency_s=round(time.time() - start, 3), task_status="OK", **_call_observability_fields(request_id, active_document_count))
+            log_query_event(query=f"[analyze:{req.mode}]", documents_searched=active_document_count, documents_contributing=len(documents_found), selected_evidence_count=len(chunks), total_latency_s=round(time.time() - start, 3), task_status="OK", **_call_observability_fields(request_id, active_document_count), **_chunk_observability_fields(chunks))
             questions_payload = [q.model_dump() for q in result.questions]
             display_label = f"{mode_label} Questions ({req.difficulty})"
             _persist_analysis_turn(req.session_id, None, "analysis_questions", display_label, {
@@ -929,25 +1033,46 @@ def api_analyze(req: AnalyzeRequest):
         if req.mode == "explain_figure":
             ref = (req.figure_reference or "").strip()
             query_text = f"{ref} figure table caption diagram graph" if ref else "figure table graph diagram caption"
-            chunks = _retrieve_for_analysis(query_text, target_document_ids, top_k=min(10, REPORT_CHUNKS_PER_DOC * max(len(target_document_ids), 1)))
+            chunks = _retrieve_for_analysis(query_text, target_document_ids, top_k=min(10, REPORT_CHUNKS_PER_DOC * max(len(target_document_ids), 1)), workspace_id=req.workspace_id)
             if not chunks:
                 return {"ok": False, "mode": req.mode, "error": INSUFFICIENT_EVIDENCE_MESSAGE}
             evidence_text = _evidence_text_from_chunks(chunks)
-            result = explain_figure(evidence_text, ref)
+
+            # Best-effort visual path: render the page image for the single
+            # most relevant chunk's own document_id + page_number (chunks
+            # are already reranked, so chunks[0] is the best match for this
+            # figure reference) — ONLY that one document/page is ever
+            # opened, never a scan across other documents. None (not an
+            # error) whenever the PDF wasn't persisted, has no page number,
+            # or a vision model isn't configured — explain_figure() falls
+            # back to the existing text-only path cleanly in every case.
+            image_b64 = None
+            top_chunk_meta = chunks[0].get("metadata", {})
+            top_doc_id = top_chunk_meta.get("document_id")
+            top_page = top_chunk_meta.get("page_number")
+            if top_doc_id and isinstance(top_page, int) and vision_model_available():
+                image_b64 = render_page_as_image_base64(top_doc_id, top_page)
+
+            result, visual_inspection_used = explain_figure(
+                evidence_text, ref,
+                image_base64=image_b64,
+                vision_model=(VISION_MODEL if image_b64 else None),
+            )
             documents_found = get_contributing_documents(chunks)
             if result is None:
                 log_query_event(query="[analyze:explain_figure]", documents_searched=active_document_count, total_latency_s=round(time.time() - start, 3), task_status="FAILED", **_call_observability_fields(request_id, active_document_count))
                 return {"ok": False, "mode": req.mode, "error": GENERATION_FAILED_MESSAGE}
-            log_query_event(query="[analyze:explain_figure]", documents_searched=active_document_count, documents_contributing=len(documents_found), selected_evidence_count=len(chunks), total_latency_s=round(time.time() - start, 3), task_status="OK", **_call_observability_fields(request_id, active_document_count))
+            log_query_event(query="[analyze:explain_figure]", documents_searched=active_document_count, documents_contributing=len(documents_found), selected_evidence_count=len(chunks), total_latency_s=round(time.time() - start, 3), task_status="OK", **_call_observability_fields(request_id, active_document_count), **_chunk_observability_fields(chunks))
             answer = result.answer if result.evidence_sufficient else INSUFFICIENT_EVIDENCE_MESSAGE
             if result.evidence_sufficient:
                 # Deterministic honesty caveat — appended regardless of what
-                # the model itself said, so this is never dependent on prompt
-                # compliance. PDF parsing (ingest.py) extracts TEXT only (no
-                # page-image rendering or vision model call exists in this
-                # pipeline), so the explanation is always caption/text-based,
-                # never a genuine visual reading of the figure.
-                answer = f"{answer}\n\n(Note: based on the paper's extracted caption/surrounding text, not a direct visual reading of the image.)"
+                # the model itself said, so this is never dependent on
+                # prompt compliance, and never claims more than actually
+                # happened for THIS specific call.
+                if visual_inspection_used:
+                    answer = f"{answer}\n\n(Note: this explanation was generated from an actual image of the PDF page, not just extracted text.)"
+                else:
+                    answer = f"{answer}\n\n(Note: visual inspection was unavailable for this request; explanation is based on the paper's extracted caption/surrounding text, not a direct visual reading of the image.)"
             user_text = f"Explain: {ref}" if ref else "Explain this figure."
             _persist_analysis_turn(req.session_id, user_text, "assistant_kicker", answer, {"kicker": "Figure Explanation"})
             return {
@@ -959,7 +1084,7 @@ def api_analyze(req: AnalyzeRequest):
         if req.mode == "recommend":
             query_text = "compare methodology architecture datasets results limitations proposed approach"
             top_k = min(18, REPORT_CHUNKS_PER_DOC * max(len(target_document_ids), 1))
-            chunks = _retrieve_for_analysis(query_text, target_document_ids, top_k)
+            chunks = _retrieve_for_analysis(query_text, target_document_ids, top_k, workspace_id=req.workspace_id)
             if not chunks:
                 return {"ok": False, "mode": req.mode, "error": INSUFFICIENT_EVIDENCE_MESSAGE}
             evidence_text = _evidence_text_from_chunks(chunks)
@@ -968,7 +1093,7 @@ def api_analyze(req: AnalyzeRequest):
             if result is None:
                 log_query_event(query="[analyze:recommend]", documents_searched=active_document_count, total_latency_s=round(time.time() - start, 3), task_status="FAILED", **_call_observability_fields(request_id, active_document_count))
                 return {"ok": False, "mode": req.mode, "error": GENERATION_FAILED_MESSAGE}
-            log_query_event(query="[analyze:recommend]", documents_searched=active_document_count, documents_contributing=len(documents_found), selected_evidence_count=len(chunks), total_latency_s=round(time.time() - start, 3), task_status="OK", **_call_observability_fields(request_id, active_document_count))
+            log_query_event(query="[analyze:recommend]", documents_searched=active_document_count, documents_contributing=len(documents_found), selected_evidence_count=len(chunks), total_latency_s=round(time.time() - start, 3), task_status="OK", **_call_observability_fields(request_id, active_document_count), **_chunk_observability_fields(chunks))
             answer = result.answer if result.evidence_sufficient else INSUFFICIENT_EVIDENCE_MESSAGE
             _persist_analysis_turn(req.session_id, None, "assistant_kicker", answer, {"kicker": "Recommendation"})
             return {
@@ -986,7 +1111,7 @@ def api_analyze(req: AnalyzeRequest):
             eval_doc_id = target_document_ids[0]
             query_text = "problem statement, novelty, methodology, experimental design, results, limitations, reproducibility"
             top_k = min(15, REPORT_CHUNKS_PER_DOC * max(len(target_document_ids), 1))
-            chunks = _retrieve_for_analysis(query_text, [eval_doc_id], top_k)
+            chunks = _retrieve_for_analysis(query_text, [eval_doc_id], top_k, workspace_id=req.workspace_id)
             if not chunks:
                 return {"ok": False, "mode": req.mode, "error": INSUFFICIENT_EVIDENCE_MESSAGE}
             evidence_text = _evidence_text_from_chunks(chunks)
@@ -995,7 +1120,7 @@ def api_analyze(req: AnalyzeRequest):
             if result is None:
                 log_query_event(query="[analyze:evaluate_paper]", documents_searched=active_document_count, total_latency_s=round(time.time() - start, 3), task_status="FAILED", **_call_observability_fields(request_id, active_document_count))
                 return {"ok": False, "mode": req.mode, "error": GENERATION_FAILED_MESSAGE}
-            log_query_event(query="[analyze:evaluate_paper]", documents_searched=active_document_count, documents_contributing=len(documents_found), selected_evidence_count=len(chunks), total_latency_s=round(time.time() - start, 3), task_status="OK", **_call_observability_fields(request_id, active_document_count))
+            log_query_event(query="[analyze:evaluate_paper]", documents_searched=active_document_count, documents_contributing=len(documents_found), selected_evidence_count=len(chunks), total_latency_s=round(time.time() - start, 3), task_status="OK", **_call_observability_fields(request_id, active_document_count), **_chunk_observability_fields(chunks))
             payload = result.model_dump()
             # Display-only: human-readable title, never the raw document_id
             # — resolved deterministically from the filename (see doc_titles.py).
@@ -1007,7 +1132,7 @@ def api_analyze(req: AnalyzeRequest):
         if req.mode == "research_gaps":
             query_text = "limitations, future work, open problems, unaddressed challenges, weaknesses, threats to validity"
             top_k = min(18, REPORT_CHUNKS_PER_DOC * max(len(target_document_ids), 1))
-            chunks = _retrieve_for_analysis(query_text, target_document_ids, top_k)
+            chunks = _retrieve_for_analysis(query_text, target_document_ids, top_k, workspace_id=req.workspace_id)
             if not chunks:
                 return {"ok": False, "mode": req.mode, "error": INSUFFICIENT_EVIDENCE_MESSAGE}
             evidence_text = _evidence_text_from_chunks(chunks)
@@ -1016,7 +1141,7 @@ def api_analyze(req: AnalyzeRequest):
             if result is None:
                 log_query_event(query="[analyze:research_gaps]", documents_searched=active_document_count, total_latency_s=round(time.time() - start, 3), task_status="FAILED", **_call_observability_fields(request_id, active_document_count))
                 return {"ok": False, "mode": req.mode, "error": GENERATION_FAILED_MESSAGE}
-            log_query_event(query="[analyze:research_gaps]", documents_searched=active_document_count, documents_contributing=len(documents_found), selected_evidence_count=len(chunks), total_latency_s=round(time.time() - start, 3), task_status="OK", **_call_observability_fields(request_id, active_document_count))
+            log_query_event(query="[analyze:research_gaps]", documents_searched=active_document_count, documents_contributing=len(documents_found), selected_evidence_count=len(chunks), total_latency_s=round(time.time() - start, 3), task_status="OK", **_call_observability_fields(request_id, active_document_count), **_chunk_observability_fields(chunks))
             gaps_payload = [g.model_dump() for g in result.gaps]
             # Display-only map so the UI can show each gap's paper by a
             # human-readable title instead of its raw document_id.
@@ -1029,7 +1154,7 @@ def api_analyze(req: AnalyzeRequest):
                 return {"ok": False, "mode": req.mode, "error": "Select at least two papers to build a literature matrix."}
             query_text = "problem, method, architecture, dataset, metrics, results, limitations, research gap"
             top_k = min(18, REPORT_CHUNKS_PER_DOC * max(len(target_document_ids), 1))
-            chunks = _retrieve_for_analysis(query_text, target_document_ids, top_k)
+            chunks = _retrieve_for_analysis(query_text, target_document_ids, top_k, workspace_id=req.workspace_id)
             if not chunks:
                 return {"ok": False, "mode": req.mode, "error": INSUFFICIENT_EVIDENCE_MESSAGE}
             evidence_text = _evidence_text_from_chunks(chunks)
@@ -1038,7 +1163,7 @@ def api_analyze(req: AnalyzeRequest):
             if result is None:
                 log_query_event(query="[analyze:literature_matrix]", documents_searched=active_document_count, total_latency_s=round(time.time() - start, 3), task_status="FAILED", **_call_observability_fields(request_id, active_document_count))
                 return {"ok": False, "mode": req.mode, "error": GENERATION_FAILED_MESSAGE}
-            log_query_event(query="[analyze:literature_matrix]", documents_searched=active_document_count, documents_contributing=len(documents_found), selected_evidence_count=len(chunks), total_latency_s=round(time.time() - start, 3), task_status="OK", **_call_observability_fields(request_id, active_document_count))
+            log_query_event(query="[analyze:literature_matrix]", documents_searched=active_document_count, documents_contributing=len(documents_found), selected_evidence_count=len(chunks), total_latency_s=round(time.time() - start, 3), task_status="OK", **_call_observability_fields(request_id, active_document_count), **_chunk_observability_fields(chunks))
             rows_payload = [r.model_dump() for r in result.rows]
             # Display-only: normalize every row's title — filename first,
             # then the model's own title from this SAME call, never the raw
@@ -1052,7 +1177,7 @@ def api_analyze(req: AnalyzeRequest):
         if req.mode == "knowledge_graph":
             query_text = "key concepts, methodology, architecture, datasets, results, contributions, limitations, relationships"
             top_k = min(18, REPORT_CHUNKS_PER_DOC * max(len(target_document_ids), 1))
-            chunks = _retrieve_for_analysis(query_text, target_document_ids, top_k)
+            chunks = _retrieve_for_analysis(query_text, target_document_ids, top_k, workspace_id=req.workspace_id)
             if not chunks:
                 return {"ok": False, "mode": req.mode, "error": INSUFFICIENT_EVIDENCE_MESSAGE}
             evidence_text = _evidence_text_from_chunks(chunks)
@@ -1061,7 +1186,7 @@ def api_analyze(req: AnalyzeRequest):
             if result is None:
                 log_query_event(query="[analyze:knowledge_graph]", documents_searched=active_document_count, total_latency_s=round(time.time() - start, 3), task_status="FAILED", **_call_observability_fields(request_id, active_document_count))
                 return {"ok": False, "mode": req.mode, "error": GENERATION_FAILED_MESSAGE}
-            log_query_event(query="[analyze:knowledge_graph]", documents_searched=active_document_count, documents_contributing=len(documents_found), selected_evidence_count=len(chunks), total_latency_s=round(time.time() - start, 3), task_status="OK", **_call_observability_fields(request_id, active_document_count))
+            log_query_event(query="[analyze:knowledge_graph]", documents_searched=active_document_count, documents_contributing=len(documents_found), selected_evidence_count=len(chunks), total_latency_s=round(time.time() - start, 3), task_status="OK", **_call_observability_fields(request_id, active_document_count), **_chunk_observability_fields(chunks))
             nodes_payload = [n.model_dump() for n in result.nodes]
             edges_payload = [e.model_dump() for e in result.edges]
             # Display-only map so node/edge document_id pills in the UI show
@@ -1080,7 +1205,7 @@ def api_analyze(req: AnalyzeRequest):
         if req.mode in ("project_interview_start", "project_interview_evaluate"):
             query_text = "key concepts, methodology, architecture, datasets, results, contributions, limitations"
             top_k = min(15, REPORT_CHUNKS_PER_DOC * max(len(target_document_ids), 1))
-            chunks = _retrieve_for_analysis(query_text, target_document_ids, top_k)
+            chunks = _retrieve_for_analysis(query_text, target_document_ids, top_k, workspace_id=req.workspace_id)
             if not chunks:
                 return {"ok": False, "mode": req.mode, "error": INSUFFICIENT_EVIDENCE_MESSAGE}
             evidence_text = _evidence_text_from_chunks(chunks)
@@ -1091,7 +1216,7 @@ def api_analyze(req: AnalyzeRequest):
                 if result is None:
                     log_query_event(query="[analyze:project_interview_start]", documents_searched=active_document_count, total_latency_s=round(time.time() - start, 3), task_status="FAILED", **_call_observability_fields(request_id, active_document_count))
                     return {"ok": False, "mode": req.mode, "error": GENERATION_FAILED_MESSAGE}
-                log_query_event(query="[analyze:project_interview_start]", documents_searched=active_document_count, documents_contributing=len(documents_found), selected_evidence_count=len(chunks), total_latency_s=round(time.time() - start, 3), task_status="OK", **_call_observability_fields(request_id, active_document_count))
+                log_query_event(query="[analyze:project_interview_start]", documents_searched=active_document_count, documents_contributing=len(documents_found), selected_evidence_count=len(chunks), total_latency_s=round(time.time() - start, 3), task_status="OK", **_call_observability_fields(request_id, active_document_count), **_chunk_observability_fields(chunks))
                 _persist_analysis_turn(req.session_id, None, "interview_question", result.answer, {})
                 return {
                     "ok": True, "mode": req.mode, "question": result.answer,
@@ -1106,7 +1231,7 @@ def api_analyze(req: AnalyzeRequest):
             if result is None:
                 log_query_event(query="[analyze:project_interview_evaluate]", documents_searched=active_document_count, total_latency_s=round(time.time() - start, 3), task_status="FAILED", **_call_observability_fields(request_id, active_document_count))
                 return {"ok": False, "mode": req.mode, "error": GENERATION_FAILED_MESSAGE}
-            log_query_event(query="[analyze:project_interview_evaluate]", documents_searched=active_document_count, documents_contributing=len(documents_found), selected_evidence_count=len(chunks), total_latency_s=round(time.time() - start, 3), task_status="OK", **_call_observability_fields(request_id, active_document_count))
+            log_query_event(query="[analyze:project_interview_evaluate]", documents_searched=active_document_count, documents_contributing=len(documents_found), selected_evidence_count=len(chunks), total_latency_s=round(time.time() - start, 3), task_status="OK", **_call_observability_fields(request_id, active_document_count), **_chunk_observability_fields(chunks))
             # Two persisted turns per evaluate call, matching exactly what the
             # frontend pushes into conv.messages: the evaluation card, then
             # either the next question or an "interview complete" marker —
@@ -1193,12 +1318,76 @@ def api_eval_dashboard():
     except Exception:
         offline_eval = None
 
+    # 10-document isolated benchmark (evaluation/run_benchmark.py) — indexing
+    # correctness, document isolation, comparison scaling, decomposition,
+    # concurrency, and latency distribution, all LLM-free and re-runnable.
+    # Absent (None, not fabricated) until that script has actually been run.
+    benchmark_10doc = None
+    try:
+        import json as _json
+        bench_path = Path(__file__).parent.parent / "evaluation" / "results.json"
+        if bench_path.exists():
+            bdata = _json.loads(bench_path.read_text(encoding="utf-8"))
+            lat = bdata.get("latency_distribution", {}).get("end_to_end_retrieval", {})
+            benchmark_10doc = {
+                "source": "evaluation/results.json (reproducible: python evaluation/run_benchmark.py)",
+                "generated_at_utc": bdata.get("meta", {}).get("generated_at_utc"),
+                "documents_benchmarked": bdata.get("meta", {}).get("dataset_size_documents"),
+                "isolation_violations": bdata.get("B_D_retrieval_and_isolation", {}).get("isolation_violations"),
+                "cross_document_contamination_found": bdata.get("A_indexing", {}).get("cross_document_contamination_found"),
+                "retrieval_latency_mean_ms": lat.get("mean_ms"),
+                "retrieval_latency_median_ms": lat.get("median_ms"),
+                "retrieval_latency_p95_ms": lat.get("p95_ms"),
+                "concurrent_speedup_factor": bdata.get("F_concurrent_retrieval", {}).get("speedup_factor"),
+                "production_chroma_touched": bdata.get("meta", {}).get("production_chroma_touched"),
+            }
+    except Exception:
+        benchmark_10doc = None
+
+    # Offline groundedness/hallucination scoring (groundedness_eval.py) —
+    # opt-in, real Groq calls, run deliberately and never as part of normal
+    # request handling. Absent (honestly "not measured") until that script
+    # has actually been run and its output saved to this path.
+    groundedness = None
+    try:
+        import json as _json
+        gnd_path = Path(__file__).parent.parent / "data" / "groundedness_eval_results.json"
+        if gnd_path.exists():
+            gdata = _json.loads(gnd_path.read_text(encoding="utf-8"))
+            groundedness = {
+                "source": "data/groundedness_eval_results.json (backend/groundedness_eval.py, offline/opt-in)",
+                "dataset_size": gdata.get("dataset_size"),
+                "avg_groundedness_score": gdata.get("avg_groundedness_score"),
+                "avg_unsupported_claim_rate": gdata.get("avg_unsupported_claim_rate"),
+                "avg_evidence_coverage": gdata.get("avg_evidence_coverage"),
+            }
+    except Exception:
+        groundedness = None
+
+    # Cache backend + real hit/miss counters for THIS process (cache.py) —
+    # separate from the retrieval-quality benchmarks above; this is live
+    # runtime cache behavior, not an offline evaluation.
+    try:
+        cache_stats = cache.stats()
+    except Exception:
+        cache_stats = None
+
     return {
+        # --- RUNTIME (online, from real production traffic in this process) ---
         "live": live_metrics,
         "live_note": "Aggregated from logs/verityrag_events.jsonl (last up to 500 real requests). null if no queries logged yet.",
+        "cache": cache_stats,
+        # --- OFFLINE (reproducible benchmarks, run deliberately, not on every request) ---
         "offline_retrieval_eval": offline_eval,
+        "offline_benchmark_10_document": benchmark_10doc,
+        "offline_groundedness_eval": groundedness,
         "not_measured": [
-            "groundedness (no automated groundedness scorer wired to production)",
-            "hallucination_rate (no automated hallucination scorer wired to production)",
+            m for m in [
+                None if offline_eval else "offline retrieval benchmark (data/eval_results_comprehensive.json not found — run backend/run_evaluation.py)",
+                None if benchmark_10doc else "10-document benchmark (evaluation/results.json not found — run evaluation/run_benchmark.py)",
+                None if groundedness else "groundedness / unsupported-claim-rate (data/groundedness_eval_results.json not found — run backend/groundedness_eval.py, an OFFLINE, opt-in, real-LLM-call script, deliberately)",
+                "hallucination_rate as a single scalar (groundedness_eval.py reports unsupported_claim_rate as the closest measured proxy instead — see offline_groundedness_eval)",
+                "answer_relevance beyond deterministic keyword overlap (see offline_groundedness_eval / groundedness_eval.py's answer_relevance field, which IS measured but is a coarse proxy, not semantic scoring)",
+            ] if m
         ],
     }

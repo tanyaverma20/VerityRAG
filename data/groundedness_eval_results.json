@@ -1,0 +1,159 @@
+{
+  "dataset_size": 5,
+  "llm_calls_made": 5,
+  "questions_succeeded": 0,
+  "questions_rate_limited_or_failed": 5,
+  "avg_groundedness_score": "NOT_MEASURED",
+  "avg_unsupported_claim_rate": "NOT_MEASURED",
+  "avg_evidence_coverage": 0.0,
+  "methodology": "ONE structured-mode synthesis call per question (offline/eval-only, backend/groundedness_eval.py), run deliberately against a small real sample of data/eval_set.json questions with document_ids confirmed present in production ChromaDB at run time. Averages are computed only over questions that actually produced a real (non-NOT_MEASURED) score \u2014 a rate-limited or failed call contributes to questions_rate_limited_or_failed, not a fabricated 0.",
+  "not_measured": [
+    "semantic answer correctness beyond keyword overlap (would require either a reference answer + an LLM judge, or human annotation \u2014 neither is run here)"
+  ],
+  "per_question_results": [
+    {
+      "question": "What is the Transformer architecture and how does the attention mechanism work?",
+      "document_ids": [
+        "bdfaa68d8984f0dc"
+      ],
+      "answer": "The AI reasoning service is temporarily rate-limited. Your documents are safe \u2014 please try again in a bit.",
+      "grounded_self_reported": false,
+      "evidence_sufficient_self_reported": false,
+      "groundedness_score": "NOT_MEASURED",
+      "unsupported_claim_rate": "NOT_MEASURED",
+      "directly_stated_rate": "NOT_MEASURED",
+      "strongly_supported_rate": "NOT_MEASURED",
+      "total_claims": 0,
+      "evidence_coverage": 0.0,
+      "answer_relevance": {
+        "found": [],
+        "missing": [
+          "attention",
+          "encoder",
+          "decoder",
+          "multi-head"
+        ],
+        "coverage_ratio": 0.0
+      },
+      "contributing_documents": [
+        "bdfaa68d8984f0dc"
+      ],
+      "synthesis_status": "synthesis_failed"
+    },
+    {
+      "question": "Describe the Text-to-Text Transfer Transformer (T5) framework.",
+      "document_ids": [
+        "ad07e47cedf437a4"
+      ],
+      "answer": "The AI reasoning service is temporarily rate-limited. Your documents are safe \u2014 please try again in a bit.",
+      "grounded_self_reported": false,
+      "evidence_sufficient_self_reported": false,
+      "groundedness_score": "NOT_MEASURED",
+      "unsupported_claim_rate": "NOT_MEASURED",
+      "directly_stated_rate": "NOT_MEASURED",
+      "strongly_supported_rate": "NOT_MEASURED",
+      "total_claims": 0,
+      "evidence_coverage": 0.0,
+      "answer_relevance": {
+        "found": [],
+        "missing": [
+          "text-to-text",
+          "transfer learning",
+          "transformer"
+        ],
+        "coverage_ratio": 0.0
+      },
+      "contributing_documents": [
+        "ad07e47cedf437a4"
+      ],
+      "synthesis_status": "synthesis_failed"
+    },
+    {
+      "question": "How does REALM integrate retrieval during language model pre-training?",
+      "document_ids": [
+        "0ec1a7ab3de5514c"
+      ],
+      "answer": "The AI reasoning service is temporarily rate-limited. Your documents are safe \u2014 please try again in a bit.",
+      "grounded_self_reported": false,
+      "evidence_sufficient_self_reported": false,
+      "groundedness_score": "NOT_MEASURED",
+      "unsupported_claim_rate": "NOT_MEASURED",
+      "directly_stated_rate": "NOT_MEASURED",
+      "strongly_supported_rate": "NOT_MEASURED",
+      "total_claims": 0,
+      "evidence_coverage": 0.0,
+      "answer_relevance": {
+        "found": [],
+        "missing": [
+          "retrieval",
+          "pre-training",
+          "knowledge",
+          "augment"
+        ],
+        "coverage_ratio": 0.0
+      },
+      "contributing_documents": [
+        "0ec1a7ab3de5514c"
+      ],
+      "synthesis_status": "synthesis_failed"
+    },
+    {
+      "question": "What is the difference between RAG-Sequence and RAG-Token models?",
+      "document_ids": [
+        "23e3249e9a1e7541"
+      ],
+      "answer": "The AI reasoning service is temporarily rate-limited. Your documents are safe \u2014 please try again in a bit.",
+      "grounded_self_reported": false,
+      "evidence_sufficient_self_reported": false,
+      "groundedness_score": "NOT_MEASURED",
+      "unsupported_claim_rate": "NOT_MEASURED",
+      "directly_stated_rate": "NOT_MEASURED",
+      "strongly_supported_rate": "NOT_MEASURED",
+      "total_claims": 0,
+      "evidence_coverage": 0.0,
+      "answer_relevance": {
+        "found": [],
+        "missing": [
+          "sequence",
+          "token",
+          "generation",
+          "marginalize"
+        ],
+        "coverage_ratio": 0.0
+      },
+      "contributing_documents": [
+        "23e3249e9a1e7541"
+      ],
+      "synthesis_status": "synthesis_failed"
+    },
+    {
+      "question": "How does Dense Passage Retrieval (DPR) construct its dual-encoder architecture?",
+      "document_ids": [
+        "3e67fc1a9977715a"
+      ],
+      "answer": "The AI reasoning service is temporarily rate-limited. Your documents are safe \u2014 please try again in a bit.",
+      "grounded_self_reported": false,
+      "evidence_sufficient_self_reported": false,
+      "groundedness_score": "NOT_MEASURED",
+      "unsupported_claim_rate": "NOT_MEASURED",
+      "directly_stated_rate": "NOT_MEASURED",
+      "strongly_supported_rate": "NOT_MEASURED",
+      "total_claims": 0,
+      "evidence_coverage": 0.0,
+      "answer_relevance": {
+        "found": [],
+        "missing": [
+          "dual-encoder",
+          "dense",
+          "passage",
+          "question"
+        ],
+        "coverage_ratio": 0.0
+      },
+      "contributing_documents": [
+        "3e67fc1a9977715a"
+      ],
+      "synthesis_status": "synthesis_failed"
+    }
+  ]
+}

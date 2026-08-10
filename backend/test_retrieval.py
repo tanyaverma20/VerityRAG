@@ -37,6 +37,8 @@ def run_test(name: str, fn):
 # Import the modules under test
 # ---------------------------------------------------------------------------
 
+import pytest
+
 from retrieval import (
     reciprocal_rank_fusion,
     dense_search,
@@ -54,27 +56,55 @@ from retrieval import (
 from query_transform import rewrite_query, decompose_query
 from ingest import ingest_document, get_all_chunks
 from config import MAX_CONTEXT_TOKENS
+from pathlib import Path
+
+# Resolved relative to THIS file, never the process's CWD (previously a
+# bare "tests/fixtures/attention.pdf" string, which only worked when
+# pytest happened to be invoked with CWD == backend/ — from any other CWD
+# this silently failed into the except branch below with an empty
+# PAPER_A_DOC_ID, and every test depending on it then failed with a
+# confusing downstream assertion instead of a clear root cause).
+FIXTURE_PDF = Path(__file__).parent / "tests" / "fixtures" / "attention.pdf"
+
+PAPER_A_DOC_ID = ""
+PAPER_A_SOURCE = "attention.pdf"
 
 
 # ---------------------------------------------------------------------------
-# Pre-test setup: ensure the Attention paper is ingested & BM25 built
+# Pre-test setup: ensure the Attention paper is ingested & BM25 built.
+#
+# THIS MUST NOT BE A BARE MODULE-LEVEL STATEMENT. A bare top-level call runs
+# during pytest's COLLECTION phase — strictly before ANY fixture, including
+# conftest.py's session-scoped isolated_test_env, ever executes. That means
+# it would run against the real production CHROMA_DIR/DATABASE_URL rather
+# than the isolated test ones (confirmed as a real, reproducible bug during
+# Phase 3 stabilization: this exact bare call silently wrote into the real
+# local PostgreSQL 'verityrag' database when this file was collected
+# together with certain other test files, depending on unrelated import
+# order). An autouse, module-scoped fixture runs during pytest's SETUP
+# phase, which pytest always orders after the broader session-scoped
+# isolation fixture has already run — closing this gap regardless of which
+# other test files happen to be collected alongside this one.
 # ---------------------------------------------------------------------------
+@pytest.fixture(autouse=True, scope="module")
+def _ingest_paper_a():
+    global PAPER_A_DOC_ID, PAPER_A_SOURCE
+    print("\n=== Phase 2 Retrieval Test Suite ===\n")
+    print("Setting up: ingesting attention.pdf …")
+    try:
+        res = ingest_document(str(FIXTURE_PDF))
+        print(f"  Ingestion result: {res['status']}, chunks: {res.get('chunks_added', 0)}, "
+              f"doc_id: {res.get('document_id', 'N/A')}")
+        PAPER_A_DOC_ID = res.get("document_id", "")
+        PAPER_A_SOURCE = "attention.pdf"
+    except Exception as e:
+        print(f"  WARNING: ingestion failed — {e}. Some tests may fail.")
+        PAPER_A_DOC_ID = ""
+        PAPER_A_SOURCE = "attention.pdf"
 
-print("\n=== Phase 2 Retrieval Test Suite ===\n")
-print("Setting up: ingesting attention.pdf …")
-try:
-    res = ingest_document("tests/fixtures/attention.pdf")
-    print(f"  Ingestion result: {res['status']}, chunks: {res.get('chunks_added', 0)}, "
-          f"doc_id: {res.get('document_id', 'N/A')}")
-    PAPER_A_DOC_ID = res.get("document_id", "")
-    PAPER_A_SOURCE = "attention.pdf"
-except Exception as e:
-    print(f"  WARNING: ingestion failed — {e}. Some tests may fail.")
-    PAPER_A_DOC_ID = ""
-    PAPER_A_SOURCE = "attention.pdf"
-
-build_bm25_index()
-print("  BM25 index built.\n")
+    build_bm25_index()
+    print("  BM25 index built.\n")
+    yield
 
 
 # ---------------------------------------------------------------------------
@@ -360,42 +390,71 @@ def test_citation_metadata():
 
 
 # ---------------------------------------------------------------------------
-# Run all tests
+# Run all tests — standalone-script mode only (`python test_retrieval.py`).
+#
+# THIS MUST STAY GUARDED BY `if __name__ == "__main__":`. It used to be a
+# bare module-level block, which — like the module-level ingestion this
+# file used to also have (see the _ingest_paper_a fixture above) — executed
+# immediately at pytest COLLECTION time, before the _ingest_paper_a fixture
+# (which only runs later, during SETUP) had populated PAPER_A_DOC_ID. Left
+# unguarded, this would both (a) run every test twice under pytest — once
+# here at import time with stale/empty setup state, once again via pytest's
+# normal test discovery — and (b) call sys.exit(1) from inside module import
+# on any failure, which pytest cannot recover from (aborts the whole run
+# with an INTERNALERROR instead of a normal test failure). Guarding it
+# means this file still works exactly as documented at the top
+# (`python test_retrieval.py` for a standalone run with readable pass/fail
+# output), while running cleanly under pytest.
 # ---------------------------------------------------------------------------
+if __name__ == "__main__":
+    # Run the same setup the pytest fixture does, directly (not via
+    # pytest's fixture protocol, which isn't active in standalone mode).
+    print("\n=== Phase 2 Retrieval Test Suite ===\n")
+    print("Setting up: ingesting attention.pdf …")
+    try:
+        res = ingest_document(str(FIXTURE_PDF))
+        print(f"  Ingestion result: {res['status']}, chunks: {res.get('chunks_added', 0)}, "
+              f"doc_id: {res.get('document_id', 'N/A')}")
+        PAPER_A_DOC_ID = res.get("document_id", "")
+    except Exception as e:
+        print(f"  WARNING: ingestion failed — {e}. Some tests may fail.")
+        PAPER_A_DOC_ID = ""
+    build_bm25_index()
+    print("  BM25 index built.\n")
 
-tests = [
-    ("TEST 01: RRF scoring",            test_rrf_scoring),
-    ("TEST 02: RRF deduplication",      test_rrf_deduplication),
-    ("TEST 03: Dense metadata",         test_dense_metadata),
-    ("TEST 04: BM25 metadata",          test_bm25_metadata),
-    ("TEST 05: Hybrid uses RRF",        test_hybrid_uses_rrf),
-    ("TEST 06: CrossEncoder after RRF", test_crossencoder_after_rrf),
-    ("TEST 07: document_ids filter",    test_document_filter),
-    ("TEST 08: Multi-paper doc_id",     test_multi_paper_document_id),
-    ("TEST 09: Parent context",         test_parent_context),
-    ("TEST 10: Query rewrite output",   test_query_rewrite_output),
-    ("TEST 11: Rewrite fallback",       test_query_rewrite_fallback),
-    ("TEST 12: Query decomposition",    test_query_decomposition),
-    ("TEST 13: Token budget",           test_token_budget),
-    ("TEST 14: Diversity cap",          test_diversity_cap),
-    ("TEST 15: Deduplication",          test_deduplication),
-    ("TEST 16: Single-paper retrieval", test_single_paper_retrieval),
-    ("TEST 17: Backward compat",        test_backward_compat),
-    ("TEST 18: Citation metadata",      test_citation_metadata),
-]
+    tests = [
+        ("TEST 01: RRF scoring",            test_rrf_scoring),
+        ("TEST 02: RRF deduplication",      test_rrf_deduplication),
+        ("TEST 03: Dense metadata",         test_dense_metadata),
+        ("TEST 04: BM25 metadata",          test_bm25_metadata),
+        ("TEST 05: Hybrid uses RRF",        test_hybrid_uses_rrf),
+        ("TEST 06: CrossEncoder after RRF", test_crossencoder_after_rrf),
+        ("TEST 07: document_ids filter",    test_document_filter),
+        ("TEST 08: Multi-paper doc_id",     test_multi_paper_document_id),
+        ("TEST 09: Parent context",         test_parent_context),
+        ("TEST 10: Query rewrite output",   test_query_rewrite_output),
+        ("TEST 11: Rewrite fallback",       test_query_rewrite_fallback),
+        ("TEST 12: Query decomposition",    test_query_decomposition),
+        ("TEST 13: Token budget",           test_token_budget),
+        ("TEST 14: Diversity cap",          test_diversity_cap),
+        ("TEST 15: Deduplication",          test_deduplication),
+        ("TEST 16: Single-paper retrieval", test_single_paper_retrieval),
+        ("TEST 17: Backward compat",        test_backward_compat),
+        ("TEST 18: Citation metadata",      test_citation_metadata),
+    ]
 
-for name, fn in tests:
-    run_test(name, fn)
+    for name, fn in tests:
+        run_test(name, fn)
 
-passed = sum(1 for _, ok, _ in _results if ok)
-failed = sum(1 for _, ok, _ in _results if not ok)
-print(f"\n{'='*50}")
-print(f"Results: {passed} passed / {failed} failed / {len(_results)} total")
-if failed:
-    print("\nFailed tests:")
-    for name, ok, msg in _results:
-        if not ok:
-            print(f"  {name}: {msg}")
-    sys.exit(1)
-else:
-    print("\nAll Phase 2 retrieval tests PASSED.")
+    passed = sum(1 for _, ok, _ in _results if ok)
+    failed = sum(1 for _, ok, _ in _results if not ok)
+    print(f"\n{'='*50}")
+    print(f"Results: {passed} passed / {failed} failed / {len(_results)} total")
+    if failed:
+        print("\nFailed tests:")
+        for name, ok, msg in _results:
+            if not ok:
+                print(f"  {name}: {msg}")
+        sys.exit(1)
+    else:
+        print("\nAll Phase 2 retrieval tests PASSED.")

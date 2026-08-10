@@ -242,16 +242,72 @@ Output ONLY compact JSON:
 JSON:"""
 
 
-def explain_figure(evidence_text: str, figure_reference: str) -> AnswerJSON | None:
+# Used ONLY when an actual page image was rendered (figure_vision.py) AND a
+# vision-capable model is configured (figure_vision.vision_model_available())
+# — asks the model to look at the image directly, but still grounds it in
+# the same retrieved evidence text so a genuinely-visual answer never
+# contradicts what the paper's own text says.
+EXPLAIN_FIGURE_VISION_PROMPT = """You are looking at an image of one page from a research paper's PDF, and explaining a specific figure/table/graph/diagram that appears on it.
+
+The user is asking about: {figure_reference}
+
+SUPPORTING TEXT EVIDENCE from this same document (captions, surrounding text — use this to confirm labels/values you can also see in the image, and to fill in anything not visible in the image itself):
+{evidence_text}
+
+Explain what was asked about, using what you can actually SEE in the image (components, layout, curves, axis labels, table values, colors/shapes only if visually distinguishable) combined with the supporting text evidence:
+- FIGURE: what it represents, main components, relationships, important observations.
+- ARCHITECTURE DIAGRAM: components, component-to-component flow, inputs/outputs, processing stages.
+- GRAPH: axes, curves/series, visible trends, comparisons, values you can actually read off the image.
+- TABLE: columns/rows, key comparisons, values you can actually read.
+
+Rules:
+- Only describe what is genuinely visible in the image or stated in the text evidence — never invent a value, label, or component you cannot actually see or read in the evidence.
+- Do not include chunk IDs or technical citations in the answer text.
+
+Output ONLY compact JSON:
+{{
+  "answer": "...",
+  "grounded": true or false,
+  "evidence_sufficient": true or false,
+  "document_ids": ["..."]
+}}
+JSON:"""
+
+
+def explain_figure(evidence_text: str, figure_reference: str, image_base64: str | None = None, vision_model: str | None = None) -> tuple[AnswerJSON | None, bool]:
+    """
+    Returns (result, visual_inspection_used). visual_inspection_used is
+    True ONLY when an image was actually provided to a real vision-capable
+    model AND that call succeeded — the caller (main.py) uses this exact
+    flag to decide which honesty caveat to append; it is never inferred or
+    assumed from "an image was available" alone.
+    """
+    if image_base64 and vision_model:
+        from query_transform import _call_groq_vision_raw
+        vision_prompt = EXPLAIN_FIGURE_VISION_PROMPT.format(
+            figure_reference=figure_reference or "the referenced figure/table", evidence_text=evidence_text,
+        )
+        raw = _call_groq_vision_raw(vision_prompt, image_base64, vision_model)
+        if raw is not None:
+            obj = _extract_json_object(raw)
+            if obj is not None:
+                try:
+                    return AnswerJSON.model_validate(obj), True
+                except (ValidationError, Exception):
+                    pass
+        # Vision call unavailable/failed — fall through to the text-only
+        # path below rather than returning an error; the honesty caveat
+        # main.py appends will correctly say text-based, not lie either way.
+
     prompt = EXPLAIN_FIGURE_PROMPT.format(figure_reference=figure_reference or "the referenced figure/table", evidence_text=evidence_text)
     try:
         raw = _call_groq_raw(prompt)
         obj = _extract_json_object(raw)
         if obj is None:
-            return None
-        return AnswerJSON.model_validate(obj)
+            return None, False
+        return AnswerJSON.model_validate(obj), False
     except (ValidationError, Exception):
-        return None
+        return None, False
 
 
 # ---------------------------------------------------------------------------

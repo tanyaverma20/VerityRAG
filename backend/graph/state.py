@@ -21,6 +21,7 @@ class ResearchState(TypedDict):
     sub_queries: list[str]
     completed_sub_queries: list[str]
     document_ids: list[str]
+    workspace_id: str          # optional second, independent scope-enforcement point at the vector layer (see retrieval.py:_scope_where_clause) — "" when not scoped to a workspace
     
     # 3. Retrieval Phase
     retrieval_results: list[dict]

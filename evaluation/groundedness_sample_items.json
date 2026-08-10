@@ -1,0 +1,120 @@
+[
+  {
+    "question": "What is the Transformer architecture and how does the attention mechanism work?",
+    "document_ids": [
+      "bdfaa68d8984f0dc"
+    ],
+    "expected_answer_contains": [
+      "attention",
+      "encoder",
+      "decoder",
+      "multi-head"
+    ]
+  },
+  {
+    "question": "Describe the Text-to-Text Transfer Transformer (T5) framework.",
+    "document_ids": [
+      "ad07e47cedf437a4"
+    ],
+    "expected_answer_contains": [
+      "text-to-text",
+      "transfer learning",
+      "transformer"
+    ]
+  },
+  {
+    "question": "How does REALM integrate retrieval during language model pre-training?",
+    "document_ids": [
+      "0ec1a7ab3de5514c"
+    ],
+    "expected_answer_contains": [
+      "retrieval",
+      "pre-training",
+      "knowledge",
+      "augment"
+    ]
+  },
+  {
+    "question": "What is the difference between RAG-Sequence and RAG-Token models?",
+    "document_ids": [
+      "23e3249e9a1e7541"
+    ],
+    "expected_answer_contains": [
+      "sequence",
+      "token",
+      "generation",
+      "marginalize"
+    ]
+  },
+  {
+    "question": "How does Dense Passage Retrieval (DPR) construct its dual-encoder architecture?",
+    "document_ids": [
+      "3e67fc1a9977715a"
+    ],
+    "expected_answer_contains": [
+      "dual-encoder",
+      "dense",
+      "passage",
+      "question"
+    ]
+  },
+  {
+    "question": "What is the parameter count and architecture of GPT-3?",
+    "document_ids": [
+      "97fd272f1fdfc186"
+    ],
+    "expected_answer_contains": [
+      "175 billion",
+      "transformer",
+      "autoregressive"
+    ]
+  },
+  {
+    "question": "Describe the sliding window attention mechanism used in Mistral 7B.",
+    "document_ids": [
+      "653b29619eae2ae4"
+    ],
+    "expected_answer_contains": [
+      "sliding window",
+      "attention",
+      "efficiency",
+      "cache"
+    ]
+  },
+  {
+    "question": "What are the key safety and alignment techniques used for Llama 2 Chat?",
+    "document_ids": [
+      "1df284ce95f78300"
+    ],
+    "expected_answer_contains": [
+      "rlhf",
+      "safety",
+      "alignment",
+      "reward"
+    ]
+  },
+  {
+    "question": "How does grouped-query attention (GQA) improve inference in Llama 2?",
+    "document_ids": [
+      "1df284ce95f78300"
+    ],
+    "expected_answer_contains": [
+      "grouped-query",
+      "inference",
+      "speed",
+      "memory"
+    ]
+  },
+  {
+    "question": "What is the 'Colossal Clean Crawled Corpus' (C4) dataset used in T5?",
+    "document_ids": [
+      "ad07e47cedf437a4"
+    ],
+    "expected_answer_contains": [
+      "c4",
+      "corpus",
+      "web",
+      "clean"
+    ]
+  }
+]

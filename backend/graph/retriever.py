@@ -34,6 +34,7 @@ def retrieve_evidence(state: ResearchState) -> dict[str, Any]:
     completed_sub_queries = state.get("completed_sub_queries") or []
     document_ids = state.get("document_ids", None)
     research_type = state.get("research_type", "simple")
+    workspace_id = state.get("workspace_id") or None
 
     # We want to keep existing chunks in the state
     all_chunks = state.get("retrieval_results") or []
@@ -52,6 +53,7 @@ def retrieve_evidence(state: ResearchState) -> dict[str, Any]:
                 apply_parent_context=True,
                 apply_token_budget=True,
                 rerank_query=state.get("original_query"),
+                workspace_id=workspace_id,
             )
             all_chunks.extend(chunks)
             newly_completed.extend(pending)
@@ -68,6 +70,7 @@ def retrieve_evidence(state: ResearchState) -> dict[str, Any]:
                     top_k=RERANK_TOP_K,
                     apply_parent_context=True,
                     apply_token_budget=True,
+                    workspace_id=workspace_id,
                 )
                 all_chunks.extend(chunks)
                 newly_completed.append(sq)

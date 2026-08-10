@@ -2582,9 +2582,12 @@ function renderEvalDashboard(data) {
   const body = document.getElementById("evalDashboardBody");
   const live = data.live;
   const off = data.offline_retrieval_eval;
+  const cacheStats = data.cache;
+  const bench10 = data.offline_benchmark_10_document;
+  const grounded = data.offline_groundedness_eval;
   body.innerHTML = `
     <div class="eval-dash-section">
-      <h4>Live (this deployment)</h4>
+      <h4>Runtime — Live (this deployment)</h4>
       <div class="eval-dash">
         ${tile("LLM calls / query", live ? live.avg_llm_calls_per_query : null)}
         ${tile("Avg latency", live ? live.avg_latency_s : null, "s")}
@@ -2595,7 +2598,17 @@ function renderEvalDashboard(data) {
       <div class="eval-dash-note">${live ? `Sample size: ${live.sample_size} logged requests.` : 'No queries logged yet.'}</div>
     </div>
     <div class="eval-dash-section">
-      <h4>Offline Retrieval Benchmark (current hybrid+rerank pipeline)</h4>
+      <h4>Runtime — Cache (${cacheStats ? cacheStats.backend : '—'})</h4>
+      <div class="eval-dash">
+        ${tile("Hit rate", cacheStats && cacheStats.hit_rate !== null ? Math.round(cacheStats.hit_rate * 100) : null, "%")}
+        ${tile("Answer entries", cacheStats ? cacheStats.answer_entries : null)}
+        ${tile("Report entries", cacheStats ? cacheStats.report_entries : null)}
+        ${tile("Backend errors", cacheStats ? cacheStats.redis_errors : null)}
+      </div>
+      <div class="eval-dash-note">${cacheStats ? `Backend: ${cacheStats.backend} (falls back automatically if Redis is unset/unreachable).` : ''}</div>
+    </div>
+    <div class="eval-dash-section">
+      <h4>Offline — Retrieval Benchmark (11 real papers, current hybrid+rerank pipeline)</h4>
       <div class="eval-dash">
         ${tile("Precision@5", off ? off.current_pipeline_precision_at_5 : null)}
         ${tile("Recall@5", off ? off.current_pipeline_recall_at_5 : null)}
@@ -2603,6 +2616,26 @@ function renderEvalDashboard(data) {
         ${tile("Reranking Δ recall@5", off ? off.reranking_recall_at_5_improvement : null)}
       </div>
       <div class="eval-dash-note">${off ? `${off.questions_evaluated} evaluation questions · ${off.source}` : 'No offline evaluation file found.'}</div>
+    </div>
+    <div class="eval-dash-section">
+      <h4>Offline — 10-Document Isolation & Latency Benchmark</h4>
+      <div class="eval-dash">
+        ${tile("Documents benchmarked", bench10 ? bench10.documents_benchmarked : null)}
+        ${tile("Isolation violations", bench10 ? bench10.isolation_violations : null)}
+        ${tile("Retrieval latency (p95)", bench10 ? bench10.retrieval_latency_p95_ms : null, " ms")}
+        ${tile("Concurrent speedup", bench10 ? bench10.concurrent_speedup_factor : null, "x")}
+      </div>
+      <div class="eval-dash-note">${bench10 ? `${bench10.source} · production ChromaDB touched: ${bench10.production_chroma_touched}` : 'evaluation/results.json not found — run: python evaluation/run_benchmark.py'}</div>
+    </div>
+    <div class="eval-dash-section">
+      <h4>Offline — Groundedness (opt-in, real LLM calls)</h4>
+      <div class="eval-dash">
+        ${tile("Groundedness score", grounded ? grounded.avg_groundedness_score : null)}
+        ${tile("Unsupported claim rate", grounded ? grounded.avg_unsupported_claim_rate : null)}
+        ${tile("Evidence coverage", grounded ? grounded.avg_evidence_coverage : null)}
+        ${tile("Dataset size", grounded ? grounded.dataset_size : null)}
+      </div>
+      <div class="eval-dash-note">${grounded ? grounded.source : 'Not measured — run backend/groundedness_eval.py deliberately (makes real Groq calls; never run automatically).'}</div>
     </div>
     <div class="eval-dash-section">
       <h4>Not Measured</h4>

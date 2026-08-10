@@ -29,3 +29,24 @@ tokenizers==0.22.2
 # Report generation (Markdown/PDF/DOCX export from validated JSON — no LLM formatting)
 reportlab==5.0.0
 python-docx==1.2.0
+
+# Structured application persistence (db/ package). DATABASE_URL selects
+# PostgreSQL in production; falls back to the same SQLite file used before
+# when unset, so local dev/tests need nothing extra installed at the OS level.
+sqlalchemy==2.0.51
+psycopg2-binary==2.9.12
+alembic==1.19.1
+
+# Production cache (cache.py). Falls back to the existing in-memory cache
+# automatically if REDIS_URL is unset or the Redis server is unreachable.
+redis==8.1.0
+
+# OCR fallback for scanned/image-only PDFs (ingest.py). Optional at runtime:
+# requires the Tesseract OCR system binary to actually be installed: only
+# invoked when a PDF's normal text extraction comes back empty/insufficient.
+pytesseract==0.3.13
+
+# PDF page/figure rendering for Explain Figure's image-based path
+# (analysis.py). Already a transitive dependency of some installs; pinned
+# explicitly here since it's now used directly.
+PyMuPDF==1.28.0

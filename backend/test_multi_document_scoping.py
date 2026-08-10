@@ -19,6 +19,7 @@ scope) are pure client-side state with no server round-trip — verified via
 live browser testing during implementation, not a natural pytest target.
 """
 import uuid
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -29,6 +30,11 @@ from retrieval import retrieve, build_bm25_index, dense_search, bm25_search
 from main import app
 
 client = TestClient(app)
+
+# Resolved relative to THIS file, never the process's CWD (previously a
+# bare "tests/fixtures/attention.pdf" string, which only worked when
+# pytest happened to be invoked with CWD == backend/).
+FIXTURE_PDF = Path(__file__).parent / "tests" / "fixtures" / "attention.pdf"
 
 
 def _push_synthetic_document(document_id: str, text: str, filename: str) -> None:
@@ -52,7 +58,7 @@ def _push_synthetic_document(document_id: str, text: str, filename: str) -> None
 def test_two_documents_strict_scoping():
     assert config.COLLECTION_NAME == "test_collection", "Must run inside the isolated Phase 8 fixture"
 
-    doc_a_id = get_document_id("tests/fixtures/attention.pdf")  # already ingested by conftest.py
+    doc_a_id = get_document_id(str(FIXTURE_PDF))  # already ingested by conftest.py
     doc_b_id = "synthetic_paper_b_" + uuid.uuid4().hex[:8]
     _push_synthetic_document(doc_b_id, "RetentionAI predicts employee attrition using a five-stage AI pipeline.", "RetentionAI.pdf")
     build_bm25_index()

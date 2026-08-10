@@ -1,5 +1,8 @@
 import os
 import shutil
+import tempfile
+from pathlib import Path
+
 from ingest import (
     get_document_id,
     extract_pages_from_pdf,
@@ -9,27 +12,33 @@ from ingest import (
 )
 from retrieval import build_bm25_index, hybrid_retrieve
 
+# Resolved relative to THIS file, never the process's current working
+# directory — running `pytest` from the repo root, from backend/, or from
+# an IDE with a different CWD must all find the same fixture (this was a
+# real, confirmed bug in this file and three others; see the Phase 1
+# stabilization notes).
+FIXTURE_PDF = Path(__file__).parent / "tests" / "fixtures" / "attention.pdf"
+
+
 def test_same_pdf_same_id():
-    path1 = "tests/fixtures/attention.pdf"
-    path2 = "tests/fixtures/attention_copy.pdf"
-    shutil.copy(path1, path2)
-    
-    id1 = get_document_id(path1)
+    path2 = os.path.join(tempfile.mkdtemp(), "attention_copy.pdf")
+    shutil.copy(str(FIXTURE_PDF), path2)
+
+    id1 = get_document_id(str(FIXTURE_PDF))
     id2 = get_document_id(path2)
-    
+
     os.remove(path2)
     assert id1 == id2, "TEST 1 FAILED: Same PDF contents should produce the same document_id"
     print("TEST 1 PASSED: Same PDF contents produce the same document_id")
 
 def test_different_pdf_different_id():
-    path1 = "tests/fixtures/attention.pdf"
-    path2 = "tests/fixtures/dummy.pdf"
+    path2 = os.path.join(tempfile.mkdtemp(), "dummy.pdf")
     with open(path2, "wb") as f:
         f.write(b"dummy")
-        
-    id1 = get_document_id(path1)
+
+    id1 = get_document_id(str(FIXTURE_PDF))
     id2 = get_document_id(path2)
-    
+
     os.remove(path2)
     assert id1 != id2, "TEST 2 FAILED: Different PDF contents should produce different document_ids"
     print("TEST 2 PASSED: Different PDF contents produce different document_ids")
@@ -62,7 +71,7 @@ def test_unique_chunk_ids():
     print("TEST 5 PASSED: Chunk IDs are unique within a document")
 
 def test_preserve_page_numbers():
-    pages = extract_pages_from_pdf("tests/fixtures/attention.pdf")
+    pages = extract_pages_from_pdf(str(FIXTURE_PDF))
     assert len(pages) > 1, "PDF should have multiple pages"
     assert pages[0]["page_number"] == 1
     assert pages[1]["page_number"] == 2
@@ -82,7 +91,7 @@ def test_long_paragraph_split():
     print("TEST 8 PASSED: Very long paragraphs are safely split")
 
 def test_chroma_insertion():
-    res = ingest_document("tests/fixtures/attention.pdf")
+    res = ingest_document(str(FIXTURE_PDF))
     assert res["chunks_added"] > 0, "Ingestion should succeed and add chunks"
     
     chunks = get_all_chunks()
@@ -108,7 +117,7 @@ def test_retrieval():
         "attention mechanism", 
         strategy="hybrid",
         top_k=2, 
-        document_ids=[get_document_id("tests/fixtures/attention.pdf")]
+        document_ids=[get_document_id(str(FIXTURE_PDF))]
     )
     assert len(results) > 0, "Retrieval returned zero results"
     

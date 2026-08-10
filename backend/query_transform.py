@@ -228,6 +228,45 @@ def _call_groq_raw(prompt: str, max_tokens: int = MAX_ANSWER_TOKENS) -> str:
     return with_model_fallback(_attempt)
 
 
+def _call_groq_vision_raw(prompt: str, image_base64: str, vision_model: str, max_tokens: int = MAX_ANSWER_TOKENS) -> str | None:
+    """
+    Multimodal Groq call: one text prompt + one base64 PNG image, sent to
+    an explicitly-configured vision-capable model (figure_vision.py:
+    VISION_MODEL — never guessed, never defaulted to a text model). Used
+    ONLY by Explain Figure's optional visual path (analysis.py), and only
+    when figure_vision.vision_model_available() is True.
+
+    No fallback-model retry here (unlike _call_groq_raw): there is no
+    second vision-capable model configured to fall back to, so a failure
+    here — including "no vision model configured at all" — simply means
+    the caller falls back to the existing text/caption-based explanation.
+    Returns None on ANY failure rather than raising, so that fallback is
+    always a clean, silent, honest path rather than an exception the
+    caller has to specifically catch.
+    """
+    if not vision_model or not image_base64:
+        return None
+    try:
+        from groq import Groq
+        client = Groq(api_key=GROQ_API_KEY)
+        resp = client.chat.completions.create(
+            model=vision_model,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_base64}"}},
+                ],
+            }],
+            temperature=0.0,
+            max_tokens=max_tokens,
+        )
+        return (resp.choices[0].message.content or "").strip() or None
+    except Exception as e:
+        print(f"[figure_vision] vision model call failed, falling back to text-based explanation: {e}")
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------

@@ -6,6 +6,18 @@
       "runtimeExecutable": "C:\\Python313\\python.exe",
       "runtimeArgs": ["-m", "http.server", "5500", "--directory", "frontend"],
       "port": 5500
+    },
+    {
+      "name": "backend",
+      "runtimeExecutable": "C:\\Python313\\python.exe",
+      "runtimeArgs": ["-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8001", "--app-dir", "backend"],
+      "port": 8001
+    },
+    {
+      "name": "frontend-react",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "frontend-react"],
+      "port": 5173
     }
   ]
 }

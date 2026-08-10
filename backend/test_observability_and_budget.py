@@ -184,6 +184,72 @@ def test_query_endpoint_logs_observability_extras(tmp_path, monkeypatch):
     cache.clear_all()
 
 
+def test_analyze_ok_event_logs_real_retrieved_chunk_count_and_context_tokens(tmp_path, monkeypatch):
+    """Phase 9 observability audit finding: every /analyze OK-status
+    log_query_event() call passed selected_evidence_count=len(chunks) but
+    never the top-level retrieved_chunk_count / estimated_context_tokens
+    fields — they sat permanently at 0 across real production events even
+    when evidence genuinely existed, misleadingly looking like a real
+    zero-chunks measurement. This proves the fix: both fields now carry
+    real, non-fabricated values derived from the SAME chunks that were
+    actually used, on a real (mocked-LLM) /analyze call."""
+    import json as _json
+    from pathlib import Path
+    from unittest.mock import patch
+    from fastapi.testclient import TestClient
+
+    import observability
+    import main as main_module
+
+    fake_log = tmp_path / "events.jsonl"
+    monkeypatch.setattr(observability, "_LOG_FILE", fake_log)
+
+    client = TestClient(main_module.app)
+    fixture_pdf = Path(__file__).parent / "tests" / "fixtures" / "attention.pdf"
+    with open(fixture_pdf, "rb") as f:
+        upload = client.post("/upload", files={"file": ("attention.pdf", f, "application/pdf")}).json()
+    doc_id = upload["document_id"]
+
+    fake_answer = _json.dumps({
+        "answer": "The Transformer uses self-attention.", "grounded": True, "evidence_sufficient": True,
+        "document_ids": [doc_id],
+    })
+    class _FakeMessage:
+        def __init__(self, content): self.content = content
+    class _FakeChoice:
+        def __init__(self, content): self.message = _FakeMessage(content)
+    class _FakeUsage:
+        prompt_tokens = 40
+        completion_tokens = 12
+    class _FakeResponse:
+        def __init__(self, content):
+            self.choices = [_FakeChoice(content)]
+            self.usage = _FakeUsage()
+    class _FakeCompletions:
+        def create(self, model, messages, temperature=0.0, max_tokens=None):
+            return _FakeResponse(fake_answer)
+    class _FakeChat:
+        def __init__(self): self.completions = _FakeCompletions()
+    class _FakeGroqClient:
+        def __init__(self, api_key=None): self.chat = _FakeChat()
+
+    with patch("groq.Groq", _FakeGroqClient):
+        resp = client.post("/analyze", json={"mode": "evaluate_paper", "document_ids": [doc_id]})
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
+
+    lines = fake_log.read_text(encoding="utf-8").strip().splitlines()
+    last_event = _json.loads(lines[-1])
+    assert last_event["task_status"] == "OK"
+    assert last_event["selected_evidence_count"] > 0, "sanity: evidence must have genuinely been found"
+    assert last_event["retrieved_chunk_count"] == last_event["selected_evidence_count"], (
+        "retrieved_chunk_count must be a real value matching what was actually retrieved, not the old permanent 0"
+    )
+    assert last_event["estimated_context_tokens"] > 0, (
+        "estimated_context_tokens must be a real, non-zero measurement when evidence exists, not a placeholder"
+    )
+
+
 # ---------------------------------------------------------------------------
 # TEST P — production Chroma untouched by anything in this file
 # ---------------------------------------------------------------------------

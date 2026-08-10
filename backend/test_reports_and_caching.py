@@ -97,7 +97,13 @@ def test_cache_clear_invalidates_everything():
 
     cache.clear_all()  # what /upload and DELETE /documents/{id} call
 
-    assert cache.stats() == {"answer_entries": 0, "report_entries": 0}
+    # stats() now also carries hit/miss/backend observability fields (see
+    # cache.py) — assert the two counts this test actually cares about
+    # rather than exact dict equality, which would break on any future
+    # additive observability field.
+    after = cache.stats()
+    assert after["answer_entries"] == 0
+    assert after["report_entries"] == 0
     assert cache.get_cached_answer("Q1", ["docA"], "simple") is None
     assert cache.get_cached_report(["docA"]) is None
 

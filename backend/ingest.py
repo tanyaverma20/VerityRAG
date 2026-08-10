@@ -14,6 +14,7 @@ from sentence_transformers import SentenceTransformer
 
 from config import CHROMA_DIR, COLLECTION_NAME, CHUNK_SIZE, CHUNK_OVERLAP
 from database import add_document, update_document_status, delete_document as db_delete_document
+from ocr_fallback import extract_pages_with_ocr_fallback
 
 # Compatibility wrapper: uses sentence-transformers directly (already installed).
 # Preserves the original embedding model: sentence-transformers/all-MiniLM-L6-v2
@@ -57,16 +58,25 @@ def get_document_id(file_path: str) -> str:
 
 
 def extract_pages_from_pdf(path: str) -> list[dict]:
-    """Extract text from PDF while preserving page numbers (1-based)."""
+    """
+    Extract text from PDF while preserving page numbers (1-based).
+
+    Returns EVERY page (including ones where pypdf extracted little/no
+    text) rather than silently dropping them — a scanned/image-only PDF
+    would otherwise disappear entirely before the OCR fallback
+    (ocr_fallback.py, invoked by ingest_document() below) ever gets a
+    chance to run on it. A page with genuinely empty text is harmless
+    downstream: chunk_page() produces zero chunks for it, exactly as
+    before this change.
+    """
     reader = PdfReader(path)
     pages = []
     for i, page in enumerate(reader.pages):
-        text = page.extract_text()
-        if text and text.strip():
-            pages.append({
-                "page_number": i + 1,
-                "text": text
-            })
+        text = page.extract_text() or ""
+        pages.append({
+            "page_number": i + 1,
+            "text": text,
+        })
     return pages
 
 
@@ -224,10 +234,31 @@ def ingest_document(file_path: str, original_filename: str | None = None, worksp
     
     try:
         pages = extract_pages_from_pdf(str(path))
-        page_count = len(pages)
+        true_page_count = len(pages)
+
+        # OCR fallback (ocr_fallback.py) — only ever touches pages whose
+        # pypdf-extracted text was insufficient; a normal, already-
+        # text-extractable PDF passes through this call with zero pages
+        # needing OCR and is completely unaffected. Applied only during
+        # THIS ingestion call — never automatically re-run against
+        # already-ingested production documents.
+        pages, ocr_status = extract_pages_with_ocr_fallback(str(path), pages)
+        if ocr_status["pages_needing_ocr"]:
+            print(f"[ingest] {display_name}: {ocr_status}")
+
+        # Pages still genuinely empty after the OCR attempt (or with OCR
+        # unavailable) are dropped before chunking — identical to this
+        # function's original behavior for a page with no usable text.
+        pages = [p for p in pages if p.get("text") and p["text"].strip()]
+        page_count = true_page_count
         if not pages:
-            update_document_status(doc_id, status="FAILED", error_message="No text extracted")
-            return {"filename": display_name, "chunks_added": 0, "status": "no_text_extracted"}
+            error_detail = "No text extracted"
+            if ocr_status["pages_needing_ocr"] and not ocr_status["ocr_engine_available"]:
+                error_detail += " (OCR engine not installed — see ocr_fallback.py)"
+            elif ocr_status["pages_needing_ocr"]:
+                error_detail += " (OCR attempted but did not recover usable text)"
+            update_document_status(doc_id, status="FAILED", error_message=error_detail)
+            return {"filename": display_name, "chunks_added": 0, "status": "no_text_extracted", "ocr_status": ocr_status}
 
         all_chunks = []
         chunk_idx = 1
@@ -239,16 +270,23 @@ def ingest_document(file_path: str, original_filename: str | None = None, worksp
 
         if not all_chunks:
             update_document_status(doc_id, status="FAILED", error_message="No text extracted")
-            return {"filename": display_name, "chunks_added": 0, "status": "no_text_extracted"}
+            return {"filename": display_name, "chunks_added": 0, "status": "no_text_extracted", "ocr_status": ocr_status}
 
         ids = [c["chunk_id"] for c in all_chunks]
         texts = [c["text"] for c in all_chunks]
         
         # Chroma metadata doesn't accept complex types or None. Must be str, int, float, or bool.
+        # workspace_id is always present as a string (empty "" when the
+        # caller didn't supply one) rather than omitted/None, so retrieval's
+        # workspace_id filter (retrieval.py: _scope_where_clause) can query
+        # it uniformly — a chunk with "" never matches a real workspace_id,
+        # so legacy/unscoped chunks are safely excluded from any
+        # workspace-scoped query rather than silently leaking in.
         metadatas = []
         for c in all_chunks:
             metadatas.append({
                 "document_id": c["document_id"],
+                "workspace_id": workspace_id or "",
                 "filename": display_name,
                 "source": display_name,  # for backward compatibility with main.py
                 "page_number": c["page_number"],
@@ -266,7 +304,7 @@ def ingest_document(file_path: str, original_filename: str | None = None, worksp
         col.add(documents=texts, ids=ids, metadatas=metadatas)
 
         update_document_status(doc_id, status="INDEXED", chunk_count=len(all_chunks), page_count=page_count)
-        return {"filename": display_name, "chunks_added": len(all_chunks), "status": "ok", "document_id": doc_id, "page_count": page_count}
+        return {"filename": display_name, "chunks_added": len(all_chunks), "status": "ok", "document_id": doc_id, "page_count": page_count, "ocr_status": ocr_status}
     
     except Exception as e:
         update_document_status(doc_id, status="FAILED", error_message=str(e))

@@ -12,6 +12,8 @@ Run with:
 import sys
 import traceback
 
+import pytest
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -46,17 +48,40 @@ from graph.verifier import verify_evidence
 from graph.state import ResearchState
 from ingest import ingest_document
 from retrieval import build_bm25_index
+from pathlib import Path
+
+# Resolved relative to THIS file, never the process's CWD — this module-
+# level ingestion previously used a bare "tests/fixtures/attention.pdf"
+# string, which only resolved correctly when pytest happened to be invoked
+# with CWD == backend/; from any other CWD it silently failed (caught by
+# the bare except below) and every test in this file then ran against an
+# empty/missing corpus without a clear error pointing at the real cause.
+FIXTURE_PDF = Path(__file__).parent / "tests" / "fixtures" / "attention.pdf"
 
 
 # ---------------------------------------------------------------------------
-# Pre-test setup
+# Pre-test setup.
+#
+# THIS MUST NOT BE A BARE MODULE-LEVEL STATEMENT. A bare top-level call runs
+# during pytest's COLLECTION phase — strictly before ANY fixture, including
+# conftest.py's session-scoped isolated_test_env, ever executes, meaning it
+# would run against the real production CHROMA_DIR/DATABASE_URL rather than
+# the isolated test ones (confirmed as a real, reproducible bug during Phase
+# 3 stabilization — see the identical fix and full explanation in
+# test_retrieval.py, which had the same pattern). An autouse, module-scoped
+# fixture runs during pytest's SETUP phase, which is always ordered after
+# the broader session-scoped isolation fixture, regardless of which other
+# test files are collected alongside this one.
 # ---------------------------------------------------------------------------
-print("\n=== Phase 3 LangGraph Research Test Suite ===\n")
-try:
-    ingest_document("tests/fixtures/attention.pdf")
-    build_bm25_index()
-except Exception as e:
-    print("Warning during setup:", e)
+@pytest.fixture(autouse=True, scope="module")
+def _ingest_paper():
+    print("\n=== Phase 3 LangGraph Research Test Suite ===\n")
+    try:
+        ingest_document(str(FIXTURE_PDF))
+        build_bm25_index()
+    except Exception as e:
+        print("Warning during setup:", e)
+    yield
 
 # ---------------------------------------------------------------------------
 # TEST 1 — Graph construction
@@ -287,7 +312,8 @@ def test_api_backward_compatibility():
         strategy = "hybrid"
         research_type = "simple"
         session_id = None
-        
+        workspace_id = None  # added when _resolve_document_scope gained workspace scoping
+
     res = main.query(MockRequest())
     assert "answer" in res, "Must return 'answer'"
     assert "sources" in res, "Must return 'sources'"

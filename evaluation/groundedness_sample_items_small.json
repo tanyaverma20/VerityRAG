@@ -1,0 +1,61 @@
+[
+  {
+    "question": "What is the Transformer architecture and how does the attention mechanism work?",
+    "document_ids": [
+      "bdfaa68d8984f0dc"
+    ],
+    "expected_answer_contains": [
+      "attention",
+      "encoder",
+      "decoder",
+      "multi-head"
+    ]
+  },
+  {
+    "question": "Describe the Text-to-Text Transfer Transformer (T5) framework.",
+    "document_ids": [
+      "ad07e47cedf437a4"
+    ],
+    "expected_answer_contains": [
+      "text-to-text",
+      "transfer learning",
+      "transformer"
+    ]
+  },
+  {
+    "question": "How does REALM integrate retrieval during language model pre-training?",
+    "document_ids": [
+      "0ec1a7ab3de5514c"
+    ],
+    "expected_answer_contains": [
+      "retrieval",
+      "pre-training",
+      "knowledge",
+      "augment"
+    ]
+  },
+  {
+    "question": "What is the difference between RAG-Sequence and RAG-Token models?",
+    "document_ids": [
+      "23e3249e9a1e7541"
+    ],
+    "expected_answer_contains": [
+      "sequence",
+      "token",
+      "generation",
+      "marginalize"
+    ]
+  },
+  {
+    "question": "How does Dense Passage Retrieval (DPR) construct its dual-encoder architecture?",
+    "document_ids": [
+      "3e67fc1a9977715a"
+    ],
+    "expected_answer_contains": [
+      "dual-encoder",
+      "dense",
+      "passage",
+      "question"
+    ]
+  }
+]
