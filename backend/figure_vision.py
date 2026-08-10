@@ -28,6 +28,23 @@ import os
 import shutil
 from pathlib import Path
 
+# Import config FIRST, before reading any os.getenv() at module level.
+# config.py calls python-dotenv's load_dotenv() at module level, which only
+# ever runs on this, its FIRST import in the process. If this module were
+# imported before anything else had imported config (e.g. a standalone
+# script, or a different future import order in main.py), reading
+# GROQ_VISION_MODEL directly from os.getenv() here would silently bind
+# VISION_MODEL to "" for the rest of the process's lifetime — even with a
+# real value configured in .env — since this is a module-level constant,
+# never re-evaluated later. Confirmed as a real, reproducible bug (same
+# class as the one already fixed in db/session.py:resolve_database_url()):
+# in the real running app this happened to work by ordering luck only
+# (main.py imports `ingest`, which imports `config`, before it imports
+# figure_vision), but a standalone script that imports figure_vision first
+# hit exactly this failure. Importing config here removes the ordering
+# dependency entirely.
+import config  # noqa: F401
+
 UPLOADS_DIR = Path(__file__).parent.parent / "data" / "uploads"
 
 # Empty by default — no vision-capable model is assumed to exist. Only set
