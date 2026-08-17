@@ -50,3 +50,9 @@ pytesseract==0.3.13
 # (analysis.py). Already a transitive dependency of some installs; pinned
 # explicitly here since it's now used directly.
 PyMuPDF==1.28.0
+
+# Authentication (auth.py). bcrypt for password hashing — real, salted,
+# slow-by-design. Session tokens themselves are opaque random strings
+# (secrets.token_urlsafe, stdlib) hashed with stdlib hashlib before
+# storage, not JWTs, so no additional token library is needed.
+bcrypt==5.0.0

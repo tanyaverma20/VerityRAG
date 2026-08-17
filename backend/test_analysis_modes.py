@@ -25,18 +25,41 @@ import config
 from ingest import get_collection
 from retrieval import build_bm25_index
 from main import app
+from database import add_document
+from test_auth_helpers import registered_user_with_workspace
 
 client = TestClient(app)
 
+# /analyze's PDF-grounded modes now require a real authenticated,
+# workspace-owning caller (see main.py's _require_workspace_owner()) —
+# registered once per module, deferred to setup time (see
+# test_workspace_isolation.py for why this must not be bare module-level
+# code).
+HEADERS: dict = {}
+WORKSPACE_ID: str = ""
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _module_auth():
+    global HEADERS, WORKSPACE_ID
+    HEADERS, WORKSPACE_ID = registered_user_with_workspace(client, "analyze")
+    yield
+
 
 def _push_chunk(document_id: str, suffix: str, text: str, filename: str) -> None:
+    # Registers the document in the SQL registry under WORKSPACE_ID too
+    # (not just Chroma) — _resolve_document_scope()'s workspace_id filter
+    # is a real SQL-layer check (documents_in_workspace()), so a chunk
+    # with no matching registry row would now be silently filtered out.
+    add_document(document_id, filename, status="INDEXED", workspace_id=WORKSPACE_ID)
     col = get_collection()
     chunk_id = f"doc_{document_id}_{suffix}"
     col.add(
         documents=[text],
         ids=[chunk_id],
         metadatas=[{
-            "document_id": document_id, "filename": filename, "source": filename,
+            "document_id": document_id, "workspace_id": WORKSPACE_ID,
+            "filename": filename, "source": filename,
             "page_number": 1, "section": "Body", "chunk_id": chunk_id,
             "parent_id": f"{document_id}_{suffix}_parent", "chunk_type": "child",
         }],
@@ -142,7 +165,7 @@ def two_docs():
 # ---------------------------------------------------------------------------
 def test_viva_generates_questions_one_call_scoped(two_docs):
     doc_a, doc_b = two_docs
-    resp = client.post("/analyze", json={"mode": "viva", "document_ids": [doc_a], "difficulty": "basic", "num_questions": 3})
+    resp = client.post("/analyze", json={"mode": "viva", "document_ids": [doc_a], "workspace_id": WORKSPACE_ID, "difficulty": "basic", "num_questions": 3}, headers=HEADERS)
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is True
@@ -153,7 +176,7 @@ def test_viva_generates_questions_one_call_scoped(two_docs):
 
 def test_mock_test_generates_questions_one_call(two_docs):
     doc_a, doc_b = two_docs
-    resp = client.post("/analyze", json={"mode": "mock_test", "document_ids": [doc_a, doc_b], "difficulty": "advanced", "num_questions": 4})
+    resp = client.post("/analyze", json={"mode": "mock_test", "document_ids": [doc_a, doc_b], "workspace_id": WORKSPACE_ID, "difficulty": "advanced", "num_questions": 4}, headers=HEADERS)
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is True
@@ -164,7 +187,7 @@ def test_mock_test_generates_questions_one_call(two_docs):
 
 def test_explain_figure_one_call_scoped(two_docs):
     doc_a, doc_b = two_docs
-    resp = client.post("/analyze", json={"mode": "explain_figure", "document_ids": [doc_b], "figure_reference": "Figure 1"})
+    resp = client.post("/analyze", json={"mode": "explain_figure", "document_ids": [doc_b], "workspace_id": WORKSPACE_ID, "figure_reference": "Figure 1"}, headers=HEADERS)
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is True
@@ -175,7 +198,7 @@ def test_explain_figure_one_call_scoped(two_docs):
 
 def test_recommend_one_call_covers_both_papers(two_docs):
     doc_a, doc_b = two_docs
-    resp = client.post("/analyze", json={"mode": "recommend", "document_ids": [doc_a, doc_b]})
+    resp = client.post("/analyze", json={"mode": "recommend", "document_ids": [doc_a, doc_b], "workspace_id": WORKSPACE_ID}, headers=HEADERS)
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is True
@@ -184,7 +207,7 @@ def test_recommend_one_call_covers_both_papers(two_docs):
 
 
 def test_pdf_grounded_mode_with_no_documents_scoped_fails_closed():
-    resp = client.post("/analyze", json={"mode": "viva", "document_ids": []})
+    resp = client.post("/analyze", json={"mode": "viva", "document_ids": [], "workspace_id": WORKSPACE_ID}, headers=HEADERS)
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is False
@@ -196,7 +219,7 @@ def test_pdf_grounded_mode_with_no_documents_scoped_fails_closed():
 # Non-PDF modes: Why This Design / System Design / Project Interview
 # ---------------------------------------------------------------------------
 def test_why_design_one_call_no_documents_needed():
-    resp = client.post("/analyze", json={"mode": "why_design", "question": "Why RRF instead of simple score averaging?"})
+    resp = client.post("/analyze", json={"mode": "why_design", "question": "Why RRF instead of simple score averaging?"}, headers=HEADERS)
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is True
@@ -205,7 +228,7 @@ def test_why_design_one_call_no_documents_needed():
 
 
 def test_system_design_one_call():
-    resp = client.post("/analyze", json={"mode": "system_design", "question": "How would you scale to millions of PDFs?"})
+    resp = client.post("/analyze", json={"mode": "system_design", "question": "How would you scale to millions of PDFs?"}, headers=HEADERS)
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is True
@@ -214,7 +237,7 @@ def test_system_design_one_call():
 
 
 def test_design_mode_requires_a_question():
-    resp = client.post("/analyze", json={"mode": "why_design"})
+    resp = client.post("/analyze", json={"mode": "why_design"}, headers=HEADERS)
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is False
@@ -227,9 +250,9 @@ def test_project_interview_start_then_evaluate_two_calls_total(two_docs):
     # here just like every other analysis mode.
     doc_a, doc_b = two_docs
     start_resp = client.post("/analyze", json={
-        "mode": "project_interview_start", "document_ids": [doc_a],
+        "mode": "project_interview_start", "document_ids": [doc_a], "workspace_id": WORKSPACE_ID,
         "difficulty": "intermediate", "topics": [],
-    })
+    }, headers=HEADERS)
     assert start_resp.status_code == 200
     start_data = start_resp.json()
     assert start_data["ok"] is True
@@ -237,12 +260,12 @@ def test_project_interview_start_then_evaluate_two_calls_total(two_docs):
     assert start_data["documents_used"] == [doc_a]
 
     eval_resp = client.post("/analyze", json={
-        "mode": "project_interview_evaluate", "document_ids": [doc_a],
+        "mode": "project_interview_evaluate", "document_ids": [doc_a], "workspace_id": WORKSPACE_ID,
         "question": start_data["question"],
         "user_answer": "It uses a mixture-of-experts routing layer.",
         "difficulty": "intermediate",
         "topics": [],
-    })
+    }, headers=HEADERS)
     assert eval_resp.status_code == 200
     eval_data = eval_resp.json()
     assert eval_data["ok"] is True
@@ -253,14 +276,14 @@ def test_project_interview_start_then_evaluate_two_calls_total(two_docs):
 
 
 def test_project_interview_evaluate_requires_answer():
-    resp = client.post("/analyze", json={"mode": "project_interview_evaluate", "question": "What is RRF?"})
+    resp = client.post("/analyze", json={"mode": "project_interview_evaluate", "question": "What is RRF?", "workspace_id": WORKSPACE_ID}, headers=HEADERS)
     assert resp.status_code == 200
     assert resp.json()["ok"] is False
     assert _call_count["n"] == 0
 
 
 def test_unknown_mode_rejected():
-    resp = client.post("/analyze", json={"mode": "not_a_real_mode"})
+    resp = client.post("/analyze", json={"mode": "not_a_real_mode"}, headers=HEADERS)
     assert resp.status_code == 400
 
 

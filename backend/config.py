@@ -66,6 +66,26 @@ DEEP_RESEARCH_MAX_ITERATIONS = int(os.getenv("DEEP_RESEARCH_MAX_ITERATIONS", "3"
 DEEP_RESEARCH_MAX_LLM_CALLS = int(os.getenv("DEEP_RESEARCH_MAX_LLM_CALLS", "12"))
 DEEP_RESEARCH_MAX_RETRIES = int(os.getenv("DEEP_RESEARCH_MAX_RETRIES", "1"))
 
+# CORS (security audit finding: main.py previously hardcoded
+# allow_origins=["*"], which — combined with real per-user authentication —
+# would let ANY origin's JavaScript read another logged-in user's
+# responses if a browser ever sent along their bearer token. Configurable
+# via a comma-separated env var so a real deployment can lock this down to
+# its actual frontend origin(s); the dev default covers Vite's default
+# port (5173) and the vanilla-JS legacy frontend's typical static-server
+# ports, never "*".
+def parse_cors_origins(raw: str) -> list[str]:
+    """Pure parsing logic, factored out so it's testable without reloading
+    this module (reloading would re-run load_dotenv() and risks the exact
+    env-var-restoration footgun documented in conftest.py)."""
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
+CORS_ALLOWED_ORIGINS = parse_cors_origins(os.getenv(
+    "CORS_ALLOWED_ORIGINS",
+    "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8000,http://127.0.0.1:8000",
+))
+
 # Upload size cap (Phase 13 security audit finding: /upload previously had
 # no size limit at all — an unbounded upload could exhaust disk/memory).
 # 50 MB is generous for a real academic paper (even ones with many figures)

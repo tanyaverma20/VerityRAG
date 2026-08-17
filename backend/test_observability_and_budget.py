@@ -158,8 +158,13 @@ def test_query_endpoint_logs_observability_extras(tmp_path, monkeypatch):
     fake_log = tmp_path / "events.jsonl"
     monkeypatch.setattr(observability, "_LOG_FILE", fake_log)
 
+    from database import add_document
+    from test_auth_helpers import registered_user_with_workspace
+
     client = TestClient(main_module.app)
-    resp = client.post("/query", json={"question": "test"})  # no document_ids => NO_DOCUMENTS short-circuit, 0 LLM calls
+    headers, ws_id = registered_user_with_workspace(client, "obsbudget")
+
+    resp = client.post("/query", json={"question": "test", "workspace_id": ws_id}, headers=headers)  # no document_ids => NO_DOCUMENTS short-circuit, 0 LLM calls
     assert resp.status_code == 200
     # The NO_DOCUMENTS short-circuit in /query returns before any log_query_event
     # call today — this is expected and fine (nothing to log for a no-op).
@@ -168,8 +173,9 @@ def test_query_endpoint_logs_observability_extras(tmp_path, monkeypatch):
     # deterministic and doesn't require a real LLM call.
     import cache
     cache.clear_all()
-    cache.set_cached_answer("cached question", ["docA"], "simple", {"answer": "Cached.", "confidence": "HIGH"})
-    resp2 = client.post("/query", json={"question": "cached question", "document_ids": ["docA"]})
+    add_document("docA", "docA.pdf", status="INDEXED", workspace_id=ws_id)
+    cache.set_cached_answer("cached question", ["docA"], "simple", {"answer": "Cached.", "confidence": "HIGH"}, workspace_id=ws_id)
+    resp2 = client.post("/query", json={"question": "cached question", "document_ids": ["docA"], "workspace_id": ws_id}, headers=headers)
     assert resp2.status_code == 200
     assert resp2.json()["answer"] == "Cached."
 
@@ -200,14 +206,19 @@ def test_analyze_ok_event_logs_real_retrieved_chunk_count_and_context_tokens(tmp
 
     import observability
     import main as main_module
+    from test_auth_helpers import registered_user_with_workspace
 
     fake_log = tmp_path / "events.jsonl"
     monkeypatch.setattr(observability, "_LOG_FILE", fake_log)
 
     client = TestClient(main_module.app)
+    headers, ws_id = registered_user_with_workspace(client, "obsanalyze")
     fixture_pdf = Path(__file__).parent / "tests" / "fixtures" / "attention.pdf"
     with open(fixture_pdf, "rb") as f:
-        upload = client.post("/upload", files={"file": ("attention.pdf", f, "application/pdf")}).json()
+        upload = client.post(
+            "/upload", files={"file": ("attention.pdf", f, "application/pdf")},
+            data={"workspace_id": ws_id}, headers=headers,
+        ).json()
     doc_id = upload["document_id"]
 
     fake_answer = _json.dumps({
@@ -234,7 +245,7 @@ def test_analyze_ok_event_logs_real_retrieved_chunk_count_and_context_tokens(tmp
         def __init__(self, api_key=None): self.chat = _FakeChat()
 
     with patch("groq.Groq", _FakeGroqClient):
-        resp = client.post("/analyze", json={"mode": "evaluate_paper", "document_ids": [doc_id]})
+        resp = client.post("/analyze", json={"mode": "evaluate_paper", "document_ids": [doc_id], "workspace_id": ws_id}, headers=headers)
     assert resp.status_code == 200
     assert resp.json()["ok"] is True
 

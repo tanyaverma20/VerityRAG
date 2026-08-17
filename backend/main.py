@@ -2,14 +2,17 @@ import re as _re
 import tempfile
 from pathlib import Path
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, Query
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 import uuid
 import time
 
-from ingest import ingest_document, get_collection, delete_document_from_index
+import auth
+
+from ingest import ingest_document, get_collection, delete_document_from_index, backfill_orphaned_chunk_workspace_ids
 from retrieval import retrieve, retrieve_multi, hybrid_retrieve, build_bm25_index, get_contributing_documents, get_retrieval_stats
 from query_transform import decompose_query_deterministic
 from analysis import (
@@ -22,14 +25,14 @@ from figure_vision import persist_uploaded_pdf, get_uploaded_pdf_path, render_pa
 from verify import verify_answer
 from llm import call_llm
 from database import (
-    list_documents, get_document,
+    list_documents, list_documents_for_owner, get_document,
     list_collections, get_collection as db_get_collection, create_collection,
     add_document_to_collection, remove_document_from_collection, delete_collection,
-    create_session, get_session, list_sessions, delete_session, update_session_collection,
+    create_session, get_session, list_sessions, list_sessions_for_owner, delete_session, update_session_collection,
     add_message, get_session_messages,
     create_task, update_task_status, get_task, task_belongs_to_workspace,
     create_workspace, get_workspace, list_workspaces, documents_in_workspace,
-    update_session_title,
+    update_session_title, workspace_owner_id,
 )
 from observability import log_query_event, filter_events, read_recent_events
 from query_transform import (
@@ -37,7 +40,7 @@ from query_transform import (
     GENERATION_FAILED_MESSAGE, is_rate_limit_error,
     start_call_tracking, get_call_log,
 )
-from config import GROQ_MODEL, GROQ_FALLBACK_MODEL, REPORT_CHUNKS_PER_DOC, MAX_UPLOAD_BYTES
+from config import GROQ_MODEL, GROQ_FALLBACK_MODEL, REPORT_CHUNKS_PER_DOC, MAX_UPLOAD_BYTES, CORS_ALLOWED_ORIGINS
 import cache
 from schemas import ResearchReport, PaperReport, ComparisonReport
 from report_generator import generate_report, render_report_markdown, render_report_pdf, render_report_docx
@@ -106,6 +109,46 @@ def _resolve_document_scope(document_ids: list[str] | None, collection_id: str |
         # never pull another workspace's evidence into retrieval.
         resolved = documents_in_workspace(resolved, workspace_id)
     return resolved
+
+
+def _require_workspace_owner(workspace_id: str | None, user: dict) -> str:
+    """The real authorization check ("Do NOT use workspace_id supplied by
+    the client as the security principal"): a workspace_id is never
+    trusted on its own — it must actually belong (Workspace.owner_user_id)
+    to the authenticated user making the request, verified against the
+    database on every call. Fails closed with 404 (never 403) so a
+    mismatched/foreign/nonexistent workspace_id all look identical to the
+    caller — matching every other ownership check already in this API
+    (_reject_if_foreign_workspace, task_belongs_to_workspace, ...). A
+    workspace with no owner at all (owner_user_id is NULL — legacy,
+    created before authentication existed and not yet claimed) is never
+    accessible to any authenticated user; only the very first account ever
+    registered on a deployment auto-claims those once, at registration
+    time (see auth.register_user / bootstrap_claim_orphaned_workspaces).
+    Returns workspace_id unchanged so this can be used inline."""
+    if not workspace_id:
+        raise HTTPException(400, "workspace_id is required.")
+    owner = workspace_owner_id(workspace_id)
+    if owner is None or owner != user["user_id"]:
+        raise HTTPException(404, "Workspace not found")
+    return workspace_id
+
+
+def _require_resource_owner(resource_workspace_id: str | None, user: dict, not_found_message: str) -> None:
+    """Same ownership policy as _require_workspace_owner(), applied to a
+    resource (document/session/task/report) that already carries its OWN
+    workspace_id rather than accepting one from the client. A
+    workspace-owned resource is only reachable by that workspace's real
+    owner. A workspace-less resource (legacy data created before workspace
+    support existed at all) has no ownership to enforce and stays
+    reachable to any authenticated user, unchanged — the same
+    backward-compatible pattern this API already uses everywhere a
+    workspace_id check is optional-by-presence."""
+    if not resource_workspace_id:
+        return
+    owner = workspace_owner_id(resource_workspace_id)
+    if owner is None or owner != user["user_id"]:
+        raise HTTPException(404, not_found_message)
 
 
 def _safe_filename(title: str) -> str:
@@ -199,9 +242,16 @@ def _evidence_text_from_chunks(chunks: list[dict]) -> str:
 
 app = FastAPI(title="VerityRAG API")
 
+# Security audit finding: previously allow_origins=["*"] — wide open.
+# Now real authenticated requests carry a bearer token, so an
+# unrestricted origin list would let any website's JavaScript make
+# credentialed-looking requests on a logged-in user's behalf. Configurable
+# via CORS_ALLOWED_ORIGINS (see config.py) so a real deployment sets it to
+# its actual frontend origin(s); the dev default is a safe, specific list,
+# never "*".
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # fine for local dev; restrict this before deploying
+    allow_origins=CORS_ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -266,6 +316,14 @@ class ReportRequest(BaseModel):
     workspace_id: str | None = None
     session_id: str | None = None   # when set, persists a history record the same way /query does
 
+class AuthRegisterRequest(BaseModel):
+    email: str
+    password: str
+
+class AuthLoginRequest(BaseModel):
+    email: str
+    password: str
+
 class AnalyzeRequest(BaseModel):
     # "viva" | "mock_test" | "explain_figure" | "recommend" (PDF-grounded) |
     # "why_design" | "system_design" | "project_interview_start" |
@@ -285,6 +343,15 @@ class AnalyzeRequest(BaseModel):
 @app.on_event("startup")
 def startup():
     build_bm25_index()
+    # Chroma-side counterpart of db.repository._migrate_legacy_columns()'s
+    # Postgres backfill — see backfill_orphaned_chunk_workspace_ids()'s
+    # docstring. Best-effort: must never block startup.
+    try:
+        updated = backfill_orphaned_chunk_workspace_ids()
+        if updated:
+            print(f"[startup] backfilled workspace_id on {updated} legacy Chroma chunk(s)")
+    except Exception as e:
+        print(f"[startup] chunk workspace_id backfill check skipped: {e}")
 
 
 @app.get("/health")
@@ -293,8 +360,57 @@ def health():
     return {"status": "ok", "chunks_indexed": collection.count()}
 
 
+# --- Auth Endpoints ---
+# Real registration/login/logout/me, backed entirely by auth.py + database.py
+# (bcrypt-hashed passwords, opaque SHA-256-hashed bearer session tokens —
+# see auth.py's module docstring for the full design rationale). Every other
+# endpoint's `Depends(auth.get_current_user)` usage (wired in as ownership
+# enforcement lands, see _require_workspace_owner()) traces back to these.
+
+# Logout intentionally does NOT require Depends(auth.get_current_user) —
+# logging out with an already-invalid/expired/unknown token must be a safe
+# no-op (see test_auth.py::test_logout_of_an_unknown_token_does_not_raise),
+# not a 401, so it uses its own permissive bearer extractor instead.
+_logout_bearer = HTTPBearer(auto_error=False)
+
+
+@app.post("/auth/register", status_code=201)
+def api_register(req: AuthRegisterRequest):
+    try:
+        user, token = auth.register_user(req.email, req.password)
+    except auth.AuthError as e:
+        status = 409 if "already exists" in e.message else 400
+        raise HTTPException(status, e.message)
+    return {"user": user, "token": token}
+
+
+@app.post("/auth/login")
+def api_login(req: AuthLoginRequest):
+    try:
+        user, token = auth.login_user(req.email, req.password)
+    except auth.AuthError as e:
+        raise HTTPException(401, e.message)
+    return {"user": user, "token": token}
+
+
+@app.post("/auth/logout")
+def api_logout(creds: HTTPAuthorizationCredentials | None = Depends(_logout_bearer)):
+    if creds and creds.credentials:
+        auth.logout_user(creds.credentials)
+    return {"status": "ok"}
+
+
+@app.get("/auth/me")
+def api_me(user: dict = Depends(auth.get_current_user)):
+    return user
+
+
 @app.post("/upload")
-async def upload_document(file: UploadFile = File(...), workspace_id: str | None = Form(None)):
+async def upload_document(file: UploadFile = File(...), workspace_id: str | None = Form(None), user: dict = Depends(auth.get_current_user)):
+    # Real ownership check FIRST, before any file I/O — an unauthorized
+    # upload attempt must never even reach disk.
+    _require_workspace_owner(workspace_id, user)
+
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(400, "Only PDF files are supported right now.")
 
@@ -348,69 +464,57 @@ async def upload_document(file: UploadFile = File(...), workspace_id: str | None
         Path(tmp_path).unlink(missing_ok=True)
 
 # --- Workspace Endpoints ---
+# Every workspace endpoint requires a real authenticated user
+# (Depends(auth.get_current_user)) — a workspace_id alone is never a
+# security principal (see _require_workspace_owner()'s docstring).
 
 @app.post("/workspaces")
-def api_create_workspace(req: WorkspaceCreateRequest):
+def api_create_workspace(req: WorkspaceCreateRequest, user: dict = Depends(auth.get_current_user)):
     name = (req.name or "").strip() or "Untitled Workspace"
     ws_id = uuid.uuid4().hex[:12]
-    return create_workspace(ws_id, name)
+    return create_workspace(ws_id, name, owner_user_id=user["user_id"])
 
 @app.get("/workspaces")
-def api_list_workspaces():
-    return list_workspaces()
+def api_list_workspaces(user: dict = Depends(auth.get_current_user)):
+    return list_workspaces(owner_user_id=user["user_id"])
 
 @app.get("/workspaces/{workspace_id}")
-def api_get_workspace(workspace_id: str):
-    ws = get_workspace(workspace_id)
-    if not ws:
-        raise HTTPException(404, "Workspace not found")
-    return ws
+def api_get_workspace(workspace_id: str, user: dict = Depends(auth.get_current_user)):
+    _require_workspace_owner(workspace_id, user)
+    return get_workspace(workspace_id)
 
 # --- Document Endpoints ---
 
 @app.get("/documents")
-def api_list_documents(workspace_id: str | None = None):
-    return list_documents(workspace_id)
-
-def _reject_if_foreign_workspace(doc: dict, requested_workspace_id: str | None) -> None:
-    """Isolation check (Phase 4 audit): document_id is a deterministic
-    content hash — a client with an identical file (e.g. a well-known
-    public paper) can compute another workspace's document_id without ever
-    having uploaded it themselves. GET/DELETE /documents/{doc_id} previously
-    had NO workspace check at all, so a caller from any workspace could
-    read another workspace's document metadata, or — more seriously —
-    DELETE another workspace's document outright.
-
-    Two independent reasons this stays a no-op (same opt-in, backward-
-    compatible pattern as every other workspace_id check in this API):
-      - the CALLER omitted workspace_id entirely (original unscoped
-        behavior, unchanged), or
-      - the DOCUMENT itself has no workspace_id (legacy/no-workspace
-        upload) — there is no ownership to enforce, exactly like
-        task_belongs_to_workspace() treats a workspace-less task.
-    404, not 403, so a mismatched request can't distinguish "wrong
-    workspace" from "doesn't exist" — same pattern used for /task/{task_id}.
-    """
-    if not requested_workspace_id or not doc.get("workspace_id"):
-        return
-    if doc["workspace_id"] != requested_workspace_id:
-        raise HTTPException(404, "Document not found")
+def api_list_documents(workspace_id: str | None = None, user: dict = Depends(auth.get_current_user)):
+    if workspace_id:
+        _require_workspace_owner(workspace_id, user)
+        return list_documents(workspace_id)
+    # No workspace_id given: the real authorization boundary is now every
+    # workspace this user actually owns (never "every document in the
+    # database" — see list_documents_for_owner()'s docstring for the
+    # cross-tenant leak this closes).
+    return list_documents_for_owner(user["user_id"])
 
 
 @app.get("/documents/{doc_id}")
-def api_get_document(doc_id: str, workspace_id: str | None = None):
+def api_get_document(doc_id: str, user: dict = Depends(auth.get_current_user)):
     doc = get_document(doc_id)
     if not doc:
         raise HTTPException(404, "Document not found")
-    _reject_if_foreign_workspace(doc, workspace_id)
+    # document_id is a deterministic content hash — a caller with an
+    # identical file (e.g. a well-known public paper) can compute another
+    # workspace's document_id without ever having uploaded it themselves,
+    # so real ownership (not the client's say-so) is what's checked here.
+    _require_resource_owner(doc.get("workspace_id"), user, "Document not found")
     return doc
 
 @app.delete("/documents/{doc_id}")
-def api_delete_document(doc_id: str, workspace_id: str | None = None):
+def api_delete_document(doc_id: str, user: dict = Depends(auth.get_current_user)):
     doc = get_document(doc_id)
     if not doc:
         raise HTTPException(404, "Document not found")
-    _reject_if_foreign_workspace(doc, workspace_id)
+    _require_resource_owner(doc.get("workspace_id"), user, "Document not found")
     delete_document_from_index(doc_id)
     build_bm25_index()
     cache.clear_all()   # removed doc must immediately stop participating — no stale cached answer/report can survive it
@@ -446,52 +550,64 @@ def api_delete_collection(collection_id: str):
 # --- Session Endpoints ---
 
 @app.post("/sessions")
-def api_create_session(req: SessionCreateRequest):
+def api_create_session(req: SessionCreateRequest, user: dict = Depends(auth.get_current_user)):
+    # workspace_id stays optional here (a session can be a scratch/no-
+    # workspace conversation, unchanged pre-existing behavior) — but if one
+    # IS given, it must really belong to this user.
+    if req.workspace_id:
+        _require_workspace_owner(req.workspace_id, user)
     sess_id = uuid.uuid4().hex[:12]
     return create_session(sess_id, req.collection_id, workspace_id=req.workspace_id, title=req.title)
 
 @app.get("/sessions")
-def api_list_sessions(workspace_id: str | None = None):
-    return list_sessions(workspace_id)
+def api_list_sessions(workspace_id: str | None = None, user: dict = Depends(auth.get_current_user)):
+    if workspace_id:
+        _require_workspace_owner(workspace_id, user)
+        return list_sessions(workspace_id)
+    return list_sessions_for_owner(user["user_id"])
 
 @app.patch("/sessions/{session_id}")
-def api_update_session(session_id: str, req: SessionUpdateRequest):
+def api_update_session(session_id: str, req: SessionUpdateRequest, user: dict = Depends(auth.get_current_user)):
     sess = get_session(session_id)
     if not sess:
         raise HTTPException(404, "Session not found")
+    _require_resource_owner(sess.get("workspace_id"), user, "Session not found")
     update_session_title(session_id, req.title)
     return get_session(session_id)
 
 @app.get("/sessions/{session_id}/messages")
-def api_get_session_messages(session_id: str):
+def api_get_session_messages(session_id: str, user: dict = Depends(auth.get_current_user)):
     sess = get_session(session_id)
     if not sess:
         raise HTTPException(404, "Session not found")
+    _require_resource_owner(sess.get("workspace_id"), user, "Session not found")
     return get_session_messages(session_id)
 
 @app.delete("/sessions/{session_id}")
-def api_delete_session(session_id: str):
+def api_delete_session(session_id: str, user: dict = Depends(auth.get_current_user)):
+    sess = get_session(session_id)
+    if not sess:
+        raise HTTPException(404, "Session not found")
+    _require_resource_owner(sess.get("workspace_id"), user, "Session not found")
     delete_session(session_id)
     return {"status": "ok"}
 
 # --- Task Endpoints ---
 
 @app.get("/task/{task_id}")
-def api_get_task(task_id: str, workspace_id: str | None = None):
+def api_get_task(task_id: str, user: dict = Depends(auth.get_current_user)):
     task = get_task(task_id)
     if not task:
         raise HTTPException(404, "Task not found")
-    # Isolation check (Phase 4 audit): a task created under one workspace
-    # must not be readable by a request claiming a different workspace_id,
-    # even though task_id alone would otherwise be enough. A task created
-    # with no workspace_id at all (legacy/no-workspace callers) has no
-    # ownership to enforce and stays reachable — unchanged pre-existing
-    # behavior, matching every other workspace_id check in this API. 404,
-    # not 403, so a mismatched request can't distinguish "wrong workspace"
-    # from "task doesn't exist" — same pattern documents_in_workspace()
-    # already uses.
-    if workspace_id and not task_belongs_to_workspace(task_id, workspace_id):
-        raise HTTPException(404, "Task not found")
+    # Isolation check (Phase 4 audit, hardened): a task created under one
+    # workspace must not be readable by any other user, regardless of what
+    # workspace_id a request claims — real ownership (task.workspace_id's
+    # real owner_user_id), not a client-supplied value, is what's checked.
+    # A task created with no workspace_id at all (legacy/no-workspace
+    # callers) has no ownership to enforce and stays reachable — unchanged
+    # pre-existing behavior. 404, not 403, so a mismatched request can't
+    # distinguish "wrong owner" from "task doesn't exist".
+    _require_resource_owner(task.get("workspace_id"), user, "Task not found")
     return task
 
 # --- Observability Endpoints ---
@@ -501,9 +617,23 @@ def api_get_logs(
     task_id: str | None = None,
     session_id: str | None = None,
     event_type: str | None = None,
-    limit: int = 50
+    limit: int = 50,
+    user: dict = Depends(auth.get_current_user),
 ):
-    # Safe, sanitized filtering without exposing secrets
+    # Security audit finding: observability events can include real query
+    # text — gated behind authentication, and when a task_id/session_id
+    # filter is given, real ownership of that specific resource is
+    # required (same 404-not-403 pattern as the rest of this API) so one
+    # user can't read another user's query history by guessing/enumerating
+    # a task_id or session_id.
+    if task_id:
+        task = get_task(task_id)
+        if task:
+            _require_resource_owner(task.get("workspace_id"), user, "Task not found")
+    if session_id:
+        sess = get_session(session_id)
+        if sess:
+            _require_resource_owner(sess.get("workspace_id"), user, "Session not found")
     logs = filter_events(task_id=task_id, session_id=session_id, event_type=event_type, n=limit)
     return logs
 
@@ -554,6 +684,37 @@ def _execute_research_graph(question: str, session_id: str | None, collection_id
         "chat_history": chat_history,
         "structured_mode": structured_mode,
         "workspace_id": workspace_id or "",
+        # Real, reproduced bug this session: every field below is a
+        # ResearchState/TypedDict schema field (graph/state.py) that no
+        # node writes before analyzer.py's generate_adaptive_queries()
+        # first reads it on a "deep" research run. LangGraph pre-fills
+        # every schema-declared key not present in THIS initial dict as
+        # None (not "absent") until some node's return value first sets
+        # it — so downstream `state.get(key, default)` calls silently got
+        # None instead of `default`, since dict.get()'s default only
+        # applies when the key is truly absent. Confirmed live: this
+        # crashed every real Deep Research task with
+        # "'NoneType' object has no attribute 'append'"
+        # (adaptive_queries) immediately followed by
+        # "unsupported operand type(s) for +: 'NoneType' and 'int'"
+        # (research_iterations) once the first bug was fixed. Seeding
+        # real empty/zero defaults here — matching each field's declared
+        # type — is the root-cause fix, not a per-call-site patch.
+        "research_iterations": 1,
+        "sub_queries": [],
+        "completed_sub_queries": [],
+        "evidence_gaps": [],
+        "adaptive_queries": [],
+        "contradictions": [],
+        "similarities": [],
+        "differences": [],
+        "research_gaps": [],
+        "retrieval_results": [],
+        "evidence_by_document": {},
+        "verification_results": [],
+        "claims": [],
+        "citations": [],
+        "retry_count": 0,
     }
     
     if task_id:
@@ -645,15 +806,25 @@ def async_research_worker(task_id: str, request: ResearchRequest):
         )
 
 @app.post("/research")
-def api_research(request: ResearchRequest, background_tasks: BackgroundTasks):
+def api_research(request: ResearchRequest, background_tasks: BackgroundTasks, user: dict = Depends(auth.get_current_user)):
+    _require_workspace_owner(request.workspace_id, user)
     task_id = uuid.uuid4().hex[:12]
     create_task(task_id, request.session_id, workspace_id=request.workspace_id)
     background_tasks.add_task(async_research_worker, task_id, request)
     return {"task_id": task_id, "status": "PENDING"}
 @app.post("/query")
-def query(request: QueryRequest):
+def query(request: QueryRequest, user: dict = Depends(auth.get_current_user)):
     import time
     from graph.workflow import research_app
+
+    # Real ownership check ("Do NOT use workspace_id supplied by the
+    # client as the security principal"): workspace_id is now REQUIRED and
+    # verified against the authenticated user before any retrieval
+    # happens — closes the pre-existing gap where a caller could pass
+    # someone else's document_ids directly (a deterministic content hash,
+    # guessable/reusable across workspaces) and bypass workspace scoping
+    # entirely by simply omitting workspace_id.
+    _require_workspace_owner(request.workspace_id, user)
 
     start = time.time()
     request_id = _new_request_id()
@@ -873,21 +1044,21 @@ def query(request: QueryRequest):
 # document_ids, cleared on any upload/delete (see cache.clear_all() above).
 
 @app.post("/report")
-def api_generate_report(req: ReportRequest):
+def api_generate_report(req: ReportRequest, user: dict = Depends(auth.get_current_user)):
     if not req.document_ids:
         raise HTTPException(400, "At least one document is required to generate a report.")
 
-    # Isolation check (Phase 4 audit): unlike /query and /analyze, this
-    # endpoint previously used req.document_ids directly with NO workspace
-    # ownership check at all — a client from any workspace could generate
-    # (and read back, via the deterministic cache key) a comparative report
-    # over document_ids it never actually uploaded, as long as it could
-    # guess/learn those content-hash IDs. _resolve_document_scope() applies
-    # the same data-layer filter /query and /analyze already use: when
-    # workspace_id is supplied, only document_ids that actually belong to
-    # it survive; omitting workspace_id keeps the original unscoped
-    # behavior (backward compatible, same opt-in pattern used everywhere
-    # else in this API).
+    # Isolation check (hardened): report_id is itself a deterministic cache
+    # key derived from document_ids/workspace_id — a client from any
+    # workspace could previously generate (and read back) a comparative
+    # report over document_ids it never actually uploaded, as long as it
+    # could guess/learn those content-hash IDs, since NEITHER generation
+    # NOR the 4 GET-by-id endpoints below checked real ownership at all.
+    # workspace_id is now required and verified against the authenticated
+    # user before anything else, and is stored inside the report payload
+    # itself so every GET-by-id endpoint can enforce the same real
+    # ownership check (see _require_resource_owner() calls below).
+    _require_workspace_owner(req.workspace_id, user)
     target_document_ids = _resolve_document_scope(req.document_ids, None, req.workspace_id)
     if not target_document_ids:
         return {"ok": False, "error": NO_DOCUMENTS_MESSAGE, "report_id": None}
@@ -930,6 +1101,10 @@ def api_generate_report(req: ReportRequest):
         "conclusion": report.conclusion,
         "evidence_sufficient": report.evidence_sufficient,
         "documents_found": len({c["document_id"] for c in result["citations"]}),
+        # Stored (not just used to derive the cache key) so every GET-by-id
+        # endpoint below can enforce real ownership on read, not just on
+        # generation — see _require_resource_owner() calls below.
+        "workspace_id": req.workspace_id,
     }
     report_id = cache.set_cached_report(target_document_ids, payload, workspace_id=req.workspace_id)
     stored = cache.get_report_by_id(report_id)
@@ -947,19 +1122,30 @@ def api_generate_report(req: ReportRequest):
     return final_payload
 
 
-@app.get("/report/{report_id}")
-def api_get_report(report_id: str):
+def _get_owned_report_or_404(report_id: str, user: dict) -> dict:
+    """Shared by all 4 report GET-by-id endpoints. report_id is itself a
+    deterministic cache key (guessable-format if you already know the
+    document_ids/workspace_id that produced it) — real ownership, not mere
+    possession of the id, is what's checked. A stored report with no
+    workspace_id (generated before this field existed — old, likely
+    already TTL-expired cache entries) has no ownership to enforce and
+    stays reachable, unchanged legacy behavior."""
     stored = cache.get_report_by_id(report_id)
     if not stored:
         raise HTTPException(404, "Report not found — it may have expired, or the workspace has changed since it was generated.")
+    _require_resource_owner(stored.get("workspace_id"), user, "Report not found — it may have expired, or the workspace has changed since it was generated.")
+    return stored
+
+
+@app.get("/report/{report_id}")
+def api_get_report(report_id: str, user: dict = Depends(auth.get_current_user)):
+    stored = _get_owned_report_or_404(report_id, user)
     return {k: v for k, v in stored.items() if k != "_cached_at"}
 
 
 @app.get("/report/{report_id}/markdown")
-def api_get_report_markdown(report_id: str):
-    stored = cache.get_report_by_id(report_id)
-    if not stored:
-        raise HTTPException(404, "Report not found — it may have expired, or the workspace has changed since it was generated.")
+def api_get_report_markdown(report_id: str, user: dict = Depends(auth.get_current_user)):
+    stored = _get_owned_report_or_404(report_id, user)
     report_obj = _stored_to_research_report(stored)
     md = render_report_markdown(report_obj)  # rendered from the validated JSON — no LLM call
     return Response(
@@ -969,10 +1155,8 @@ def api_get_report_markdown(report_id: str):
 
 
 @app.get("/report/{report_id}/pdf")
-def api_get_report_pdf(report_id: str):
-    stored = cache.get_report_by_id(report_id)
-    if not stored:
-        raise HTTPException(404, "Report not found — it may have expired, or the workspace has changed since it was generated.")
+def api_get_report_pdf(report_id: str, user: dict = Depends(auth.get_current_user)):
+    stored = _get_owned_report_or_404(report_id, user)
     report_obj = _stored_to_research_report(stored)
     pdf_bytes = render_report_pdf(report_obj)  # rendered from the validated JSON — no LLM call
     return Response(
@@ -982,10 +1166,8 @@ def api_get_report_pdf(report_id: str):
 
 
 @app.get("/report/{report_id}/docx")
-def api_get_report_docx(report_id: str):
-    stored = cache.get_report_by_id(report_id)
-    if not stored:
-        raise HTTPException(404, "Report not found — it may have expired, or the workspace has changed since it was generated.")
+def api_get_report_docx(report_id: str, user: dict = Depends(auth.get_current_user)):
+    stored = _get_owned_report_or_404(report_id, user)
     report_obj = _stored_to_research_report(stored)
     docx_bytes = render_report_docx(report_obj)  # rendered from the validated JSON — no LLM call
     return Response(
@@ -1015,9 +1197,16 @@ _NON_PDF_ANALYSIS_MODES = {"why_design", "system_design"}
 
 
 @app.post("/analyze")
-def api_analyze(req: AnalyzeRequest):
+def api_analyze(req: AnalyzeRequest, user: dict = Depends(auth.get_current_user)):
     if req.mode not in _PDF_GROUNDED_ANALYSIS_MODES and req.mode not in _NON_PDF_ANALYSIS_MODES:
         raise HTTPException(400, f"Unknown analyze mode: {req.mode}")
+
+    # PDF-grounded modes read real, real document content, so real
+    # ownership is required — same policy as /query and /report. The two
+    # "own architecture" modes (why_design/system_design) touch no
+    # workspace data at all and stay reachable to any authenticated user.
+    if req.mode in _PDF_GROUNDED_ANALYSIS_MODES:
+        _require_workspace_owner(req.workspace_id, user)
 
     request_id = _new_request_id()
     active_document_count = 0

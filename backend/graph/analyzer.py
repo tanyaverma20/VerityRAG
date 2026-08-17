@@ -109,8 +109,19 @@ def generate_adaptive_queries(state: ResearchState) -> dict[str, Any]:
             pass
             
     # Deduplicate queries
-    existing = set(state.get("sub_queries", []))
-    adaptive = state.get("adaptive_queries", [])
+    existing = set(state.get("sub_queries") or [])
+    # `or []`, not `.get(key, [])` alone — real, reproduced bug this
+    # session: adaptive_queries is a ResearchState/TypedDict schema field
+    # that's never included in main.py's initial_state dict for a fresh
+    # Deep Research run. LangGraph pre-populates every schema-declared key
+    # as None until a node first writes to it, so before this node's first
+    # run the key IS present with value None — dict.get(key, default) only
+    # substitutes the default when the key is ABSENT, not when its value is
+    # None, so `.get("adaptive_queries", [])` returned None here, and the
+    # very next line's .append() crashed with
+    # "'NoneType' object has no attribute 'append'", failing every real
+    # Deep Research task the moment it needed an adaptive follow-up query.
+    adaptive = state.get("adaptive_queries") or []
     
     added_sub_queries = []
     for q in new_queries:
@@ -121,14 +132,17 @@ def generate_adaptive_queries(state: ResearchState) -> dict[str, Any]:
             adaptive.append({
                 "query": text,
                 "reason": q.get("reason", "Gap detection"),
-                "iteration": state.get("research_iterations", 1),
+                "iteration": state.get("research_iterations") or 1,
                 "improved": False # Default, can be evaluated later
             })
-            
+
     return {
-        "sub_queries": state.get("sub_queries", []) + added_sub_queries,
+        # Same `or default` fix as above, applied to every remaining
+        # `.get(key, default)` in this return block that a real LangGraph
+        # run can hand None for on this node's first invocation.
+        "sub_queries": (state.get("sub_queries") or []) + added_sub_queries,
         "adaptive_queries": adaptive,
-        "research_iterations": state.get("research_iterations", 1) + 1
+        "research_iterations": (state.get("research_iterations") or 1) + 1
     }
 
 def cross_paper_analysis(state: ResearchState) -> dict[str, Any]:

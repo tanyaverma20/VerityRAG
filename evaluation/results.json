@@ -1,10 +1,10 @@
 {
   "meta": {
-    "generated_at_utc": "2026-08-10T15:08:07Z",
+    "generated_at_utc": "2026-08-17T09:03:10Z",
     "dataset": "10 original isolated benchmark documents (evaluation/benchmark_corpus.py) \u2014 NOT scraped/real research papers; hand-authored, non-overlapping technical text so retrieval correctness is independently verifiable.",
     "dataset_size_documents": 10,
     "dataset_size_questions": 20,
-    "isolated_chroma_dir": "C:\\Users\\TANYAV~1\\AppData\\Local\\Temp\\verityrag_benchmark_chroma_5r2tdcur",
+    "isolated_chroma_dir": "C:\\Users\\TANYAV~1\\AppData\\Local\\Temp\\verityrag_benchmark_chroma_llp5h22z",
     "isolated_collection_name": "benchmark_collection",
     "production_chroma_touched": false,
     "llm_calls_made": 0,
@@ -24,9 +24,9 @@
     }
   },
   "resource_usage": {
-    "process_rss_mb_before": 477.6,
-    "process_rss_mb_after": 775.0,
-    "process_rss_mb_delta": 297.4
+    "process_rss_mb_before": 477.3,
+    "process_rss_mb_after": 772.6,
+    "process_rss_mb_delta": 295.3
   },
   "A_indexing": {
     "documents_ingested": 10,
@@ -34,8 +34,8 @@
     "total_chunks_indexed": 30,
     "chroma_collection_count_matches": true,
     "cross_document_contamination_found": false,
-    "mean_index_time_ms": 57.45,
-    "total_index_time_ms": 574.49
+    "mean_index_time_ms": 82.04,
+    "total_index_time_ms": 820.36
   },
   "B_D_retrieval_and_isolation": {
     "single_document": [
@@ -44,140 +44,140 @@
         "question": "How is scaled dot-product attention computed?",
         "chunks_returned": 3,
         "isolated_correctly": true,
-        "total_latency_ms": 75.491
+        "total_latency_ms": 112.886
       },
       {
         "doc_key": "transformers",
         "question": "Why is positional encoding needed in a Transformer?",
         "chunks_returned": 3,
         "isolated_correctly": true,
-        "total_latency_ms": 71.463
+        "total_latency_ms": 103.384
       },
       {
         "doc_key": "cnn",
         "question": "What does a max pooling layer do?",
         "chunks_returned": 3,
         "isolated_correctly": true,
-        "total_latency_ms": 58.357
+        "total_latency_ms": 80.927
       },
       {
         "doc_key": "cnn",
         "question": "What dataset was used to train deep convolutional networks for image classification?",
         "chunks_returned": 3,
         "isolated_correctly": true,
-        "total_latency_ms": 58.862
+        "total_latency_ms": 76.702
       },
       {
         "doc_key": "rl",
         "question": "What is the Q-learning update rule?",
         "chunks_returned": 3,
         "isolated_correctly": true,
-        "total_latency_ms": 76.259
+        "total_latency_ms": 100.738
       },
       {
         "doc_key": "rl",
         "question": "What does an epsilon-greedy policy do?",
         "chunks_returned": 3,
         "isolated_correctly": true,
-        "total_latency_ms": 66.559
+        "total_latency_ms": 96.2
       },
       {
         "doc_key": "db_indexing",
         "question": "What data structure do relational database indexes typically use?",
         "chunks_returned": 3,
         "isolated_correctly": true,
-        "total_latency_ms": 56.127
+        "total_latency_ms": 97.412
       },
       {
         "doc_key": "db_indexing",
         "question": "What is the downside of adding more indexes to a table?",
         "chunks_returned": 3,
         "isolated_correctly": true,
-        "total_latency_ms": 55.847
+        "total_latency_ms": 85.29
       },
       {
         "doc_key": "os_scheduling",
         "question": "What problem does aging solve in priority scheduling?",
         "chunks_returned": 3,
         "isolated_correctly": true,
-        "total_latency_ms": 56.899
+        "total_latency_ms": 123.821
       },
       {
         "doc_key": "os_scheduling",
         "question": "What is a time quantum in round-robin scheduling?",
         "chunks_returned": 3,
         "isolated_correctly": true,
-        "total_latency_ms": 55.744
+        "total_latency_ms": 77.091
       },
       {
         "doc_key": "raft",
         "question": "How does a Raft candidate get elected leader?",
         "chunks_returned": 3,
         "isolated_correctly": true,
-        "total_latency_ms": 61.001
+        "total_latency_ms": 69.744
       },
       {
         "doc_key": "raft",
         "question": "When is a log entry considered committed in Raft?",
         "chunks_returned": 3,
         "isolated_correctly": true,
-        "total_latency_ms": 56.613
+        "total_latency_ms": 82.742
       },
       {
         "doc_key": "gnn",
         "question": "How does a node update its representation in a message-passing GNN?",
         "chunks_returned": 3,
         "isolated_correctly": true,
-        "total_latency_ms": 61.205
+        "total_latency_ms": 89.953
       },
       {
         "doc_key": "gnn",
         "question": "What is over-smoothing in graph neural networks?",
         "chunks_returned": 3,
         "isolated_correctly": true,
-        "total_latency_ms": 60.971
+        "total_latency_ms": 81.277
       },
       {
         "doc_key": "federated",
         "question": "What does the FedAvg algorithm average across devices?",
         "chunks_returned": 3,
         "isolated_correctly": true,
-        "total_latency_ms": 56.789
+        "total_latency_ms": 77.223
       },
       {
         "doc_key": "federated",
         "question": "Why can federated learning be slow to converge?",
         "chunks_returned": 3,
         "isolated_correctly": true,
-        "total_latency_ms": 52.825
+        "total_latency_ms": 71.523
       },
       {
         "doc_key": "compilers",
         "question": "What does dead code elimination remove?",
         "chunks_returned": 3,
         "isolated_correctly": true,
-        "total_latency_ms": 56.284
+        "total_latency_ms": 67.905
       },
       {
         "doc_key": "compilers",
         "question": "How is register allocation modeled as a graph problem?",
         "chunks_returned": 3,
         "isolated_correctly": true,
-        "total_latency_ms": 50.488
+        "total_latency_ms": 67.93
       },
       {
         "doc_key": "ir_bm25",
         "question": "What does the parameter b control in BM25?",
         "chunks_returned": 3,
         "isolated_correctly": true,
-        "total_latency_ms": 58.332
+        "total_latency_ms": 89.99
       },
       {
         "doc_key": "ir_bm25",
         "question": "Why combine BM25 with dense vector search?",
         "chunks_returned": 3,
         "isolated_correctly": true,
-        "total_latency_ms": 55.581
+        "total_latency_ms": 76.444
       }
     ],
     "multi_document": [
@@ -188,13 +188,13 @@
         ],
         "chunks_returned": 6,
         "only_targeted_docs_present": true,
-        "total_latency_ms": 114.956
+        "total_latency_ms": 157.956
       }
     ],
     "all_documents": {
       "chunks_returned": 10,
       "distinct_documents_represented": 6,
-      "total_latency_ms": 355.525
+      "total_latency_ms": 485.6
     },
     "isolation_violations": 0
   },
@@ -204,21 +204,21 @@
       "documents_represented_in_final_evidence": 2,
       "all_documents_represented": true,
       "total_chunks_selected": 6,
-      "total_latency_ms": 121.09
+      "total_latency_ms": 165.31
     },
     "5_documents": {
       "documents_requested": 5,
       "documents_represented_in_final_evidence": 5,
       "all_documents_represented": true,
       "total_chunks_selected": 15,
-      "total_latency_ms": 314.51
+      "total_latency_ms": 421.01
     },
     "10_documents": {
       "documents_requested": 10,
       "documents_represented_in_final_evidence": 10,
       "all_documents_represented": true,
       "total_chunks_selected": 30,
-      "total_latency_ms": 572.41
+      "total_latency_ms": 790.28
     }
   },
   "E_query_decomposition": {
@@ -231,46 +231,46 @@
     "scope_preserved": true,
     "both_documents_represented": true,
     "chunks_returned": 6,
-    "total_latency_ms": 133.08
+    "total_latency_ms": 172.64
   },
   "F_concurrent_retrieval": {
     "concurrent_queries": 10,
-    "wall_clock_ms": 476.52,
-    "sum_of_individual_latencies_ms": 4422.33,
-    "speedup_factor": 9.28,
+    "wall_clock_ms": 725.46,
+    "sum_of_individual_latencies_ms": 6509.8,
+    "speedup_factor": 8.97,
     "all_succeeded": true
   },
-  "bm25_index_build_ms": 5.88,
+  "bm25_index_build_ms": 5.89,
   "latency_distribution": {
     "trials": 8,
     "query": "How is scaled dot-product attention computed?",
     "end_to_end_retrieval": {
-      "mean_ms": 79.003,
-      "median_ms": 78.459,
-      "p95_ms": 82.662,
-      "min_ms": 76.424,
-      "max_ms": 82.662
+      "mean_ms": 111.655,
+      "median_ms": 105.459,
+      "p95_ms": 148.195,
+      "min_ms": 90.801,
+      "max_ms": 148.195
     },
     "dense_search": {
-      "mean_ms": 16.173,
-      "median_ms": 15.665,
-      "p95_ms": 17.996,
-      "min_ms": 14.703,
-      "max_ms": 17.996
+      "mean_ms": 22.345,
+      "median_ms": 21.636,
+      "p95_ms": 33.946,
+      "min_ms": 15.5,
+      "max_ms": 33.946
     },
     "bm25_search": {
-      "mean_ms": 0.264,
-      "median_ms": 0.275,
-      "p95_ms": 0.303,
-      "min_ms": 0.199,
-      "max_ms": 0.303
+      "mean_ms": 0.289,
+      "median_ms": 0.306,
+      "p95_ms": 0.339,
+      "min_ms": 0.216,
+      "max_ms": 0.339
     },
     "cross_encoder_rerank": {
-      "mean_ms": 58.959,
-      "median_ms": 58.853,
-      "p95_ms": 62.023,
-      "min_ms": 56.977,
-      "max_ms": 62.023
+      "mean_ms": 83.99,
+      "median_ms": 78.712,
+      "p95_ms": 118.885,
+      "min_ms": 68.958,
+      "max_ms": 118.885
     }
   },
   "baseline_vs_hybrid_retrieval_evaluation": {
@@ -281,7 +281,7 @@
     ],
     "questions_evaluated": 20,
     "baseline_dense_only_summary": {
-      "avg_latency_ms": 15.153,
+      "avg_latency_ms": 20.635,
       "avg_metrics": {
         "recall@1": 1.0,
         "precision@1": 1.0,
@@ -301,7 +301,7 @@
       }
     },
     "verityrag_hybrid_summary": {
-      "avg_latency_ms": 382.289,
+      "avg_latency_ms": 507.886,
       "avg_metrics": {
         "recall@1": 1.0,
         "precision@1": 1.0,
@@ -353,7 +353,7 @@
             "retrieved_count": 6,
             "relevant_count": 1
           },
-          "latency_ms": 14.216
+          "latency_ms": 22.95
         },
         "verityrag_hybrid": {
           "retrieved_document_ids": [
@@ -382,7 +382,7 @@
             "retrieved_count": 7,
             "relevant_count": 1
           },
-          "latency_ms": 427.561
+          "latency_ms": 555.628
         }
       },
       {
@@ -416,7 +416,7 @@
             "retrieved_count": 5,
             "relevant_count": 1
           },
-          "latency_ms": 14.098
+          "latency_ms": 20.414
         },
         "verityrag_hybrid": {
           "retrieved_document_ids": [
@@ -444,7 +444,7 @@
             "retrieved_count": 6,
             "relevant_count": 1
           },
-          "latency_ms": 410.791
+          "latency_ms": 687.94
         }
       },
       {
@@ -479,7 +479,7 @@
             "retrieved_count": 6,
             "relevant_count": 1
           },
-          "latency_ms": 13.608
+          "latency_ms": 17.4
         },
         "verityrag_hybrid": {
           "retrieved_document_ids": [
@@ -508,7 +508,7 @@
             "retrieved_count": 7,
             "relevant_count": 1
           },
-          "latency_ms": 381.968
+          "latency_ms": 493.399
         }
       },
       {
@@ -541,7 +541,7 @@
             "retrieved_count": 4,
             "relevant_count": 1
           },
-          "latency_ms": 16.34
+          "latency_ms": 22.725
         },
         "verityrag_hybrid": {
           "retrieved_document_ids": [
@@ -568,7 +568,7 @@
             "retrieved_count": 5,
             "relevant_count": 1
           },
-          "latency_ms": 416.197
+          "latency_ms": 569.582
         }
       },
       {
@@ -604,7 +604,7 @@
             "retrieved_count": 7,
             "relevant_count": 1
           },
-          "latency_ms": 13.781
+          "latency_ms": 16.591
         },
         "verityrag_hybrid": {
           "retrieved_document_ids": [
@@ -634,7 +634,7 @@
             "retrieved_count": 8,
             "relevant_count": 1
           },
-          "latency_ms": 339.433
+          "latency_ms": 511.25
         }
       },
       {
@@ -668,7 +668,7 @@
             "retrieved_count": 5,
             "relevant_count": 1
           },
-          "latency_ms": 13.35
+          "latency_ms": 16.064
         },
         "verityrag_hybrid": {
           "retrieved_document_ids": [
@@ -696,7 +696,7 @@
             "retrieved_count": 6,
             "relevant_count": 1
           },
-          "latency_ms": 357.864
+          "latency_ms": 474.661
         }
       },
       {
@@ -731,7 +731,7 @@
             "retrieved_count": 6,
             "relevant_count": 1
           },
-          "latency_ms": 12.722
+          "latency_ms": 17.869
         },
         "verityrag_hybrid": {
           "retrieved_document_ids": [
@@ -759,7 +759,7 @@
             "retrieved_count": 6,
             "relevant_count": 1
           },
-          "latency_ms": 329.973
+          "latency_ms": 435.146
         }
       },
       {
@@ -794,7 +794,7 @@
             "retrieved_count": 6,
             "relevant_count": 1
           },
-          "latency_ms": 15.352
+          "latency_ms": 20.502
         },
         "verityrag_hybrid": {
           "retrieved_document_ids": [
@@ -821,7 +821,7 @@
             "retrieved_count": 5,
             "relevant_count": 1
           },
-          "latency_ms": 412.257
+          "latency_ms": 522.378
         }
       },
       {
@@ -855,7 +855,7 @@
             "retrieved_count": 5,
             "relevant_count": 1
           },
-          "latency_ms": 16.163
+          "latency_ms": 21.004
         },
         "verityrag_hybrid": {
           "retrieved_document_ids": [
@@ -884,7 +884,7 @@
             "retrieved_count": 7,
             "relevant_count": 1
           },
-          "latency_ms": 394.451
+          "latency_ms": 501.184
         }
       },
       {
@@ -918,7 +918,7 @@
             "retrieved_count": 5,
             "relevant_count": 1
           },
-          "latency_ms": 14.577
+          "latency_ms": 18.13
         },
         "verityrag_hybrid": {
           "retrieved_document_ids": [
@@ -947,7 +947,7 @@
             "retrieved_count": 7,
             "relevant_count": 1
           },
-          "latency_ms": 380.775
+          "latency_ms": 503.005
         }
       },
       {
@@ -981,7 +981,7 @@
             "retrieved_count": 5,
             "relevant_count": 1
           },
-          "latency_ms": 15.114
+          "latency_ms": 18.434
         },
         "verityrag_hybrid": {
           "retrieved_document_ids": [
@@ -1011,7 +1011,7 @@
             "retrieved_count": 8,
             "relevant_count": 1
           },
-          "latency_ms": 379.695
+          "latency_ms": 483.63
         }
       },
       {
@@ -1045,7 +1045,7 @@
             "retrieved_count": 5,
             "relevant_count": 1
           },
-          "latency_ms": 14.538
+          "latency_ms": 21.819
         },
         "verityrag_hybrid": {
           "retrieved_document_ids": [
@@ -1072,7 +1072,7 @@
             "retrieved_count": 5,
             "relevant_count": 1
           },
-          "latency_ms": 351.876
+          "latency_ms": 460.986
         }
       },
       {
@@ -1106,7 +1106,7 @@
             "retrieved_count": 5,
             "relevant_count": 1
           },
-          "latency_ms": 15.623
+          "latency_ms": 23.36
         },
         "verityrag_hybrid": {
           "retrieved_document_ids": [
@@ -1135,7 +1135,7 @@
             "retrieved_count": 7,
             "relevant_count": 1
           },
-          "latency_ms": 420.814
+          "latency_ms": 604.159
         }
       },
       {
@@ -1169,7 +1169,7 @@
             "retrieved_count": 5,
             "relevant_count": 1
           },
-          "latency_ms": 13.897
+          "latency_ms": 18.704
         },
         "verityrag_hybrid": {
           "retrieved_document_ids": [
@@ -1196,7 +1196,7 @@
             "retrieved_count": 5,
             "relevant_count": 1
           },
-          "latency_ms": 398.049
+          "latency_ms": 488.363
         }
       },
       {
@@ -1232,7 +1232,7 @@
             "retrieved_count": 7,
             "relevant_count": 1
           },
-          "latency_ms": 14.283
+          "latency_ms": 22.218
         },
         "verityrag_hybrid": {
           "retrieved_document_ids": [
@@ -1259,7 +1259,7 @@
             "retrieved_count": 5,
             "relevant_count": 1
           },
-          "latency_ms": 376.023
+          "latency_ms": 556.437
         }
       },
       {
@@ -1294,7 +1294,7 @@
             "retrieved_count": 6,
             "relevant_count": 1
           },
-          "latency_ms": 17.101
+          "latency_ms": 25.372
         },
         "verityrag_hybrid": {
           "retrieved_document_ids": [
@@ -1321,7 +1321,7 @@
             "retrieved_count": 5,
             "relevant_count": 1
           },
-          "latency_ms": 390.537
+          "latency_ms": 494.928
         }
       },
       {
@@ -1355,7 +1355,7 @@
             "retrieved_count": 5,
             "relevant_count": 1
           },
-          "latency_ms": 15.263
+          "latency_ms": 21.66
         },
         "verityrag_hybrid": {
           "retrieved_document_ids": [
@@ -1383,7 +1383,7 @@
             "retrieved_count": 6,
             "relevant_count": 1
           },
-          "latency_ms": 292.342
+          "latency_ms": 376.072
         }
       },
       {
@@ -1417,7 +1417,7 @@
             "retrieved_count": 5,
             "relevant_count": 1
           },
-          "latency_ms": 13.473
+          "latency_ms": 24.944
         },
         "verityrag_hybrid": {
           "retrieved_document_ids": [
@@ -1447,7 +1447,7 @@
             "retrieved_count": 8,
             "relevant_count": 1
           },
-          "latency_ms": 371.646
+          "latency_ms": 487.637
         }
       },
       {
@@ -1482,7 +1482,7 @@
             "retrieved_count": 6,
             "relevant_count": 1
           },
-          "latency_ms": 20.333
+          "latency_ms": 21.205
         },
         "verityrag_hybrid": {
           "retrieved_document_ids": [
@@ -1509,7 +1509,7 @@
             "retrieved_count": 5,
             "relevant_count": 1
           },
-          "latency_ms": 450.786
+          "latency_ms": 524.101
         }
       },
       {
@@ -1543,7 +1543,7 @@
             "retrieved_count": 5,
             "relevant_count": 1
           },
-          "latency_ms": 19.226
+          "latency_ms": 21.327
         },
         "verityrag_hybrid": {
           "retrieved_document_ids": [
@@ -1570,7 +1570,7 @@
             "retrieved_count": 5,
             "relevant_count": 1
           },
-          "latency_ms": 362.737
+          "latency_ms": 427.239
         }
       }
     ]

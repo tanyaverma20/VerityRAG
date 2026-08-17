@@ -18,20 +18,36 @@ from fastapi.testclient import TestClient
 import config
 from ingest import get_collection
 from retrieval import build_bm25_index
-from database import create_session, get_session_messages
+from database import create_session, get_session_messages, add_document
 from main import app
+from test_auth_helpers import registered_user_with_workspace
 
 client = TestClient(app)
 
+# /analyze and /report now require a real authenticated, workspace-owning
+# caller — see test_workspace_isolation.py for why this is a
+# module-scoped fixture rather than bare module-level code.
+HEADERS: dict = {}
+WORKSPACE_ID: str = ""
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _module_auth():
+    global HEADERS, WORKSPACE_ID
+    HEADERS, WORKSPACE_ID = registered_user_with_workspace(client, "persist")
+    yield
+
 
 def _push_chunk(document_id: str, suffix: str, text: str, filename: str) -> None:
+    add_document(document_id, filename, status="INDEXED", workspace_id=WORKSPACE_ID)
     col = get_collection()
     chunk_id = f"doc_{document_id}_{suffix}"
     col.add(
         documents=[text],
         ids=[chunk_id],
         metadatas=[{
-            "document_id": document_id, "filename": filename, "source": filename,
+            "document_id": document_id, "workspace_id": WORKSPACE_ID,
+            "filename": filename, "source": filename,
             "page_number": 1, "section": "Body", "chunk_id": chunk_id,
             "parent_id": f"{document_id}_{suffix}_parent", "chunk_type": "child",
         }],
@@ -130,7 +146,7 @@ def _new_session():
 # ---------------------------------------------------------------------------
 def test_viva_persists_analysis_questions_message(one_doc):
     sid = _new_session()
-    resp = client.post("/analyze", json={"mode": "viva", "document_ids": [one_doc], "difficulty": "basic", "num_questions": 2, "session_id": sid})
+    resp = client.post("/analyze", json={"mode": "viva", "document_ids": [one_doc], "difficulty": "basic", "num_questions": 2, "session_id": sid, "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     assert resp.json()["ok"] is True
     msgs = get_session_messages(sid)
     assert len(msgs) == 1, "Viva has no user turn — exactly one assistant row"
@@ -141,7 +157,7 @@ def test_viva_persists_analysis_questions_message(one_doc):
 
 def test_explain_figure_persists_user_and_assistant(one_doc):
     sid = _new_session()
-    resp = client.post("/analyze", json={"mode": "explain_figure", "document_ids": [one_doc], "figure_reference": "Figure 1", "session_id": sid})
+    resp = client.post("/analyze", json={"mode": "explain_figure", "document_ids": [one_doc], "figure_reference": "Figure 1", "session_id": sid, "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     assert resp.json()["ok"] is True
     msgs = get_session_messages(sid)
     assert [m["role"] for m in msgs] == ["user", "assistant"]
@@ -152,7 +168,7 @@ def test_explain_figure_persists_user_and_assistant(one_doc):
 
 def test_project_interview_start_then_evaluate_persists_full_thread(one_doc):
     sid = _new_session()
-    start = client.post("/analyze", json={"mode": "project_interview_start", "document_ids": [one_doc], "difficulty": "intermediate", "topics": [], "session_id": sid}).json()
+    start = client.post("/analyze", json={"mode": "project_interview_start", "document_ids": [one_doc], "difficulty": "intermediate", "topics": [], "session_id": sid, "workspace_id": WORKSPACE_ID,}, headers=HEADERS).json()
     assert start["ok"] is True
     msgs = get_session_messages(sid)
     assert len(msgs) == 1 and msgs[0]["metadata"]["frontend_role"] == "interview_question"
@@ -160,8 +176,7 @@ def test_project_interview_start_then_evaluate_persists_full_thread(one_doc):
     ev = client.post("/analyze", json={
         "mode": "project_interview_evaluate", "document_ids": [one_doc],
         "question": start["question"], "user_answer": "It uses MoE routing.",
-        "difficulty": "intermediate", "topics": [], "session_id": sid,
-    }).json()
+        "difficulty": "intermediate", "topics": [], "session_id": sid, "workspace_id": WORKSPACE_ID,}, headers=HEADERS).json()
     assert ev["ok"] is True
     msgs = get_session_messages(sid)
     # start-question, user-answer, eval, next-question = 4 rows total
@@ -175,7 +190,7 @@ def test_project_interview_start_then_evaluate_persists_full_thread(one_doc):
 
 def test_why_design_persists_question_and_answer():
     sid = _new_session()
-    resp = client.post("/analyze", json={"mode": "why_design", "question": "Why RRF?", "session_id": sid})
+    resp = client.post("/analyze", json={"mode": "why_design", "question": "Why RRF?", "session_id": sid, "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     assert resp.json()["ok"] is True
     msgs = get_session_messages(sid)
     assert [m["role"] for m in msgs] == ["user", "assistant"]
@@ -186,7 +201,7 @@ def test_why_design_persists_question_and_answer():
 def test_report_persists_report_message(two_docs):
     doc_a, doc_b = two_docs
     sid = _new_session()
-    resp = client.post("/report", json={"document_ids": [doc_a, doc_b], "session_id": sid})
+    resp = client.post("/report", json={"document_ids": [doc_a, doc_b], "session_id": sid, "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     assert resp.json()["ok"] is True
     msgs = get_session_messages(sid)
     assert len(msgs) == 1
@@ -196,13 +211,13 @@ def test_report_persists_report_message(two_docs):
 
 
 def test_no_session_id_persists_nothing(one_doc):
-    resp = client.post("/analyze", json={"mode": "viva", "document_ids": [one_doc], "num_questions": 2})
+    resp = client.post("/analyze", json={"mode": "viva", "document_ids": [one_doc], "num_questions": 2, "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     assert resp.json()["ok"] is True
     # No session_id was sent — nothing to look up, and no exception either.
 
 
 def test_failed_generation_does_not_persist_when_no_documents():
     sid = _new_session()
-    resp = client.post("/analyze", json={"mode": "viva", "document_ids": [], "session_id": sid})
+    resp = client.post("/analyze", json={"mode": "viva", "document_ids": [], "session_id": sid, "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     assert resp.json()["ok"] is False
     assert get_session_messages(sid) == []

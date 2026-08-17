@@ -171,19 +171,33 @@ def test_workspace_id_is_optional_and_backward_compatible(two_workspace_docs):
 # ---------------------------------------------------------------------------
 # Documented boundary: workspace isolation vs. user authentication
 # ---------------------------------------------------------------------------
-def test_no_user_authentication_layer_exists_this_is_workspace_isolation_only():
+def test_a_real_user_authentication_layer_now_exists_workspace_id_is_no_longer_the_security_principal():
     """
-    This repository has no user-authentication system (no login, no user
-    table, no session-to-identity binding) — workspace_id is a plain
-    client-supplied scope identifier, not a security principal. This test
-    exists to document that boundary explicitly rather than let it be
-    silently assumed: workspace-level data isolation is implemented and
-    tested above; authenticating WHICH human is allowed to use a given
-    workspace_id is a separate, unimplemented concern.
+    Updated deliberately, per this test's own prior docstring, the moment a
+    real user/auth layer appeared (see auth.py, db/models.py's User/
+    UserSession, and test_auth.py for the full authentication test suite).
+
+    Workspace-level vector/document isolation (tested above in this file)
+    is still real and still independently enforced at the Chroma query
+    layer — that has NOT changed and is not weakened by this test's update.
+    What HAS changed: a workspace_id is no longer trusted as a security
+    principal on its own. Every workspace-scoped endpoint now additionally
+    requires a real authenticated user (Authorization: Bearer <session
+    token>) and verifies that user's user_id matches the workspace's real
+    owner_user_id before returning or modifying anything — see main.py's
+    _require_workspace_owner() and test_authorization.py for the adversarial
+    ownership tests (another user's workspace/document/session/task/report
+    all correctly rejected). This test only confirms the auth layer is
+    real and present, not a no-op stub.
     """
-    import inspect
     import database
-    source_names = {name for name, _ in inspect.getmembers(database)}
-    assert not any("user" in n.lower() or "auth" in n.lower() or "login" in n.lower() for n in source_names), (
-        "If a user/auth table appears, this test (and the README's documented boundary) must be updated deliberately."
-    )
+    assert hasattr(database, "create_user")
+    assert hasattr(database, "get_user_by_email")
+    assert hasattr(database, "create_user_session")
+    assert hasattr(database, "get_user_by_token_hash")
+
+    import auth
+    user, token = auth.register_user("workspace-isolation-auth-check@example.com", "correctpassword1")
+    assert auth.get_user_from_token(token)["user_id"] == user["user_id"]
+    auth.logout_user(token)
+    assert auth.get_user_from_token(token) is None  # a real, working, revocable session

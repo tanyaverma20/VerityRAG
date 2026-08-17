@@ -2,10 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "frontend-static",
-      "runtimeExecutable": "C:\\Python313\\python.exe",
-      "runtimeArgs": ["-m", "http.server", "5500", "--directory", "frontend"],
-      "port": 5500
+      "name": "frontend-react",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "frontend-react"],
+      "port": 5173
     },
     {
       "name": "backend",
@@ -14,10 +14,10 @@
       "port": 8001
     },
     {
-      "name": "frontend-react",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "frontend-react"],
-      "port": 5173
+      "name": "frontend-legacy-static",
+      "runtimeExecutable": "C:\\Python313\\python.exe",
+      "runtimeArgs": ["-m", "http.server", "5500", "--directory", "frontend"],
+      "port": 5500
     }
   ]
 }

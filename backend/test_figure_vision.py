@@ -350,10 +350,16 @@ def test_analyze_explain_figure_never_attempts_rendering_when_no_vision_model_co
         return original_render(*a, **k)
     monkeypatch.setattr(main, "render_page_as_image_base64", _tracking_render)
 
+    from test_auth_helpers import registered_user_with_workspace
+
     client = TestClient(app)
+    headers, ws_id = registered_user_with_workspace(client, "figvision")
     fixture_pdf = Path(__file__).parent / "tests" / "fixtures" / "attention.pdf"
     with open(fixture_pdf, "rb") as f:
-        upload = client.post("/upload", files={"file": ("attention.pdf", f, "application/pdf")}).json()
+        upload = client.post(
+            "/upload", files={"file": ("attention.pdf", f, "application/pdf")},
+            data={"workspace_id": ws_id}, headers=headers,
+        ).json()
     doc_id = upload["document_id"]
 
     fake_answer = json.dumps({"answer": "Text-only explanation.", "grounded": True, "evidence_sufficient": True, "document_ids": [doc_id]})
@@ -380,7 +386,8 @@ def test_analyze_explain_figure_never_attempts_rendering_when_no_vision_model_co
     with patch("groq.Groq", _FakeGroqClient):
         resp = client.post("/analyze", json={
             "mode": "explain_figure", "document_ids": [doc_id], "figure_reference": "Figure 1",
-        })
+            "workspace_id": ws_id,
+        }, headers=headers)
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is True

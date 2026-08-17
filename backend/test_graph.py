@@ -302,19 +302,24 @@ def test_full_graph_execution():
 # TEST 16 — Backward compatibility / API Integration Check
 # ---------------------------------------------------------------------------
 def test_api_backward_compatibility():
-    # Calling the actual query function from main.py via mocked Request
-    import main
-    class MockRequest:
-        question = "attention mechanism"
-        top_k = 2
-        document_ids = None
-        collection_id = None
-        strategy = "hybrid"
-        research_type = "simple"
-        session_id = None
-        workspace_id = None  # added when _resolve_document_scope gained workspace scoping
+    # main.query() now takes a real FastAPI auth dependency
+    # (Depends(auth.get_current_user)) in its signature, so calling it as
+    # a bare Python function (bypassing FastAPI's dependency injection, as
+    # this test previously did) is no longer meaningful — the real HTTP
+    # layer (TestClient), with real authentication and a real owned
+    # workspace, is what actually exercises this response shape now.
+    from fastapi.testclient import TestClient
+    from main import app
+    from test_auth_helpers import registered_user_with_workspace
 
-    res = main.query(MockRequest())
+    client = TestClient(app)
+    headers, ws_id = registered_user_with_workspace(client, "graphcompat")
+
+    resp = client.post("/query", json={
+        "question": "attention mechanism", "top_k": 2, "workspace_id": ws_id,
+    }, headers=headers)
+    assert resp.status_code == 200
+    res = resp.json()
     assert "answer" in res, "Must return 'answer'"
     assert "sources" in res, "Must return 'sources'"
     assert "structured_citations" in res, "Must return new 'structured_citations'"

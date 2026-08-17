@@ -2,9 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ChatWindow } from "./ChatWindow";
-import type { DocumentRecord } from "../api/types";
 
-function makeDoc(overrides: Partial<DocumentRecord> = {}): DocumentRecord {
+function makeDoc(overrides = {}) {
   return {
     document_id: "doc1",
     filename: "paper.pdf",
@@ -18,7 +17,7 @@ function makeDoc(overrides: Partial<DocumentRecord> = {}): DocumentRecord {
     workspace_id: "ws1",
     created_at: "",
     updated_at: "",
-    ...overrides,
+    ...overrides
   };
 }
 
@@ -40,20 +39,20 @@ describe("ChatWindow", () => {
     expect(screen.getByText("Start your research workspace")).toBeInTheDocument();
   });
 
-  it("submitting sends the question with only INDEXED document_ids, never PROCESSING/FAILED ones", async () => {
+  it("submitting sends the raw question text — document scoping is resolved by the caller (see utils/scope.test.js)", async () => {
     const onSend = vi.fn().mockResolvedValue(undefined);
     const docs = [
-      makeDoc({ document_id: "ready1", ingestion_status: "INDEXED" }),
-      makeDoc({ document_id: "ready2", ingestion_status: "INDEXED" }),
-      makeDoc({ document_id: "still_processing", ingestion_status: "PROCESSING" }),
-    ];
+    makeDoc({ document_id: "ready1", ingestion_status: "INDEXED" }),
+    makeDoc({ document_id: "ready2", ingestion_status: "INDEXED" }),
+    makeDoc({ document_id: "still_processing", ingestion_status: "PROCESSING" })];
+
     render(<ChatWindow messages={[]} documents={docs} sending={false} onSend={onSend} />);
 
     const textarea = screen.getByPlaceholderText("Ask a question about your papers…");
     await userEvent.type(textarea, "What is the contribution?");
     await userEvent.click(screen.getByRole("button", { name: "Send" }));
 
-    expect(onSend).toHaveBeenCalledWith("What is the contribution?", ["ready1", "ready2"]);
+    expect(onSend).toHaveBeenCalledWith("What is the contribution?");
   });
 
   it("does not submit an empty/whitespace-only question", async () => {
@@ -74,13 +73,13 @@ describe("ChatWindow", () => {
     render(
       <ChatWindow
         messages={[
-          { id: "1", role: "user", text: "Hello?" },
-          { id: "2", role: "assistant", text: "Hi, grounded answer." },
-        ]}
+        { id: "1", role: "user", text: "Hello?" },
+        { id: "2", role: "assistant", text: "Hi, grounded answer." }]
+        }
         documents={[makeDoc()]}
         sending={false}
-        onSend={vi.fn()}
-      />
+        onSend={vi.fn()} />
+
     );
     expect(screen.getByText("Hello?")).toBeInTheDocument();
     expect(screen.getByText("Hi, grounded answer.")).toBeInTheDocument();

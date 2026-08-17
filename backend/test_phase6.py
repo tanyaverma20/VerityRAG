@@ -81,7 +81,55 @@ class TestPhase6AdaptiveLoop:
         res = generate_adaptive_queries(state)
         assert "sub_queries" in res
         assert "adaptive_queries" in res
-        
+
+    def test_generate_adaptive_queries_survives_none_valued_schema_fields(self):
+        """Regression test for a real, reproduced bug (this session): a
+        genuine live 'deep' research run via /research crashed with
+        "'NoneType' object has no attribute 'append'" immediately followed
+        by "unsupported operand type(s) for +: 'NoneType' and 'int'".
+
+        Root cause: adaptive_queries/research_iterations are
+        ResearchState/TypedDict schema fields (graph/state.py) that no
+        earlier node writes before generate_adaptive_queries() first reads
+        them on a fresh deep-research run. Real LangGraph execution
+        pre-fills every schema-declared key NOT present in the caller's
+        initial_state as None (present-but-None, not absent) until some
+        node's return value first sets it — so `state.get(key, default)`
+        silently returned None instead of `default`, since dict.get()'s
+        default only applies when the key is truly ABSENT, not when its
+        value is None.
+
+        The existing test_adaptive_query_deduplication() above does NOT
+        catch this: it builds `state` as a plain dict literal that simply
+        OMITS adaptive_queries/research_iterations, and a real absent key
+        makes dict.get(key, default) behave correctly — that only matches
+        real LangGraph behavior for keys a node has genuinely never
+        touched in ANY invocation, not the present-but-None case a real
+        multi-node graph run produces. This test reproduces the real
+        shape: the keys are explicitly present with value None, exactly
+        as LangGraph's state channel initialization actually produces."""
+        from unittest.mock import patch
+
+        state = ResearchState(
+            original_query="Test",
+            evidence_gaps=["Gap 1"],
+            sub_queries=["Original"],
+            completed_sub_queries=[],
+            adaptive_queries=None,      # real LangGraph shape, not absent
+            research_iterations=None,   # real LangGraph shape, not absent
+        )
+        # No live LLM call needed to prove the None-handling fix — a
+        # deliberately-empty parsed response is enough to reach the
+        # previously-crashing adaptive.append()/+1 lines either way.
+        with patch("graph.analyzer._call_groq_raw", return_value='{"queries": [{"query": "a follow-up query", "reason": "test"}]}'):
+            res = generate_adaptive_queries(state)
+
+        assert res["adaptive_queries"] == [
+            {"query": "a follow-up query", "reason": "test", "iteration": 1, "improved": False}
+        ]
+        assert res["research_iterations"] == 2
+        assert res["sub_queries"] == ["Original", "a follow-up query"]
+
     def test_cross_paper_structure(self):
         """15, 17, 18, 19. Test cross paper structure."""
         state = ResearchState(original_query="Test", research_type="deep")

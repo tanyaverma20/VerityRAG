@@ -28,8 +28,24 @@ import config
 from ingest import get_collection, get_document_id, delete_document_from_index
 from retrieval import retrieve, build_bm25_index, dense_search, bm25_search
 from main import app
+from test_auth_helpers import registered_user_with_workspace
 
 client = TestClient(app)
+
+# /query now requires a real authenticated, workspace-owning caller — see
+# test_workspace_isolation.py for why this is a module-scoped fixture
+# rather than bare module-level code. Most of this file exercises
+# retrieve()/dense_search()/bm25_search() directly (no HTTP layer, no auth
+# involved) — only the two /query HTTP tests at the bottom need this.
+HEADERS: dict = {}
+WORKSPACE_ID: str = ""
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _module_auth():
+    global HEADERS, WORKSPACE_ID
+    HEADERS, WORKSPACE_ID = registered_user_with_workspace(client, "multidoc")
+    yield
 
 # Resolved relative to THIS file, never the process's CWD (previously a
 # bare "tests/fixtures/attention.pdf" string, which only worked when
@@ -146,7 +162,7 @@ def test_removed_document_not_retrievable():
 # /query with no document scope must NEVER search anything.
 # ---------------------------------------------------------------------------
 def test_query_with_no_document_scope_never_searches():
-    resp = client.post("/query", json={"question": "What is the capital of France?"})
+    resp = client.post("/query", json={"question": "What is the capital of France?", "workspace_id": WORKSPACE_ID}, headers=HEADERS)
     assert resp.status_code == 200
     data = resp.json()
     assert data["documents_found"] == 0
@@ -155,7 +171,7 @@ def test_query_with_no_document_scope_never_searches():
 
 
 def test_query_with_empty_document_ids_list_never_searches():
-    resp = client.post("/query", json={"question": "test", "document_ids": []})
+    resp = client.post("/query", json={"question": "test", "document_ids": [], "workspace_id": WORKSPACE_ID}, headers=HEADERS)
     assert resp.status_code == 200
     data = resp.json()
     assert data["documents_found"] == 0

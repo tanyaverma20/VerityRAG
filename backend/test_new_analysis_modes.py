@@ -16,22 +16,38 @@ from fastapi.testclient import TestClient
 import config
 from ingest import get_collection
 from retrieval import build_bm25_index
-from database import create_session, get_session_messages
+from database import create_session, get_session_messages, add_document
 from main import app
+from test_auth_helpers import registered_user_with_workspace
 
 client = TestClient(app)
 
 _call_count = {"n": 0}
 
+# /analyze's PDF-grounded modes require a real authenticated,
+# workspace-owning caller — see test_workspace_isolation.py for why this
+# is a module-scoped fixture rather than bare module-level code.
+HEADERS: dict = {}
+WORKSPACE_ID: str = ""
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _module_auth():
+    global HEADERS, WORKSPACE_ID
+    HEADERS, WORKSPACE_ID = registered_user_with_workspace(client, "newmode")
+    yield
+
 
 def _push_chunk(document_id: str, suffix: str, text: str, filename: str) -> None:
+    add_document(document_id, filename, status="INDEXED", workspace_id=WORKSPACE_ID)
     col = get_collection()
     chunk_id = f"doc_{document_id}_{suffix}"
     col.add(
         documents=[text],
         ids=[chunk_id],
         metadatas=[{
-            "document_id": document_id, "filename": filename, "source": filename,
+            "document_id": document_id, "workspace_id": WORKSPACE_ID,
+            "filename": filename, "source": filename,
             "page_number": 1, "section": "Body", "chunk_id": chunk_id,
             "parent_id": f"{document_id}_{suffix}_parent", "chunk_type": "child",
         }],
@@ -131,7 +147,7 @@ def two_docs():
 # ---------------------------------------------------------------------------
 def test_evaluate_paper_one_call_scoped_to_single_document(two_docs):
     doc_a, doc_b = two_docs
-    resp = client.post("/analyze", json={"mode": "evaluate_paper", "document_ids": [doc_a]})
+    resp = client.post("/analyze", json={"mode": "evaluate_paper", "document_ids": [doc_a], "workspace_id": WORKSPACE_ID}, headers=HEADERS)
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is True
@@ -145,7 +161,7 @@ def test_evaluate_paper_one_call_scoped_to_single_document(two_docs):
 
 def test_research_gaps_one_call_labels_each_gap(two_docs):
     doc_a, doc_b = two_docs
-    resp = client.post("/analyze", json={"mode": "research_gaps", "document_ids": [doc_a, doc_b]})
+    resp = client.post("/analyze", json={"mode": "research_gaps", "document_ids": [doc_a, doc_b], "workspace_id": WORKSPACE_ID}, headers=HEADERS)
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is True
@@ -157,7 +173,7 @@ def test_research_gaps_one_call_labels_each_gap(two_docs):
 
 def test_literature_matrix_one_row_per_paper_isolated(two_docs):
     doc_a, doc_b = two_docs
-    resp = client.post("/analyze", json={"mode": "literature_matrix", "document_ids": [doc_a, doc_b]})
+    resp = client.post("/analyze", json={"mode": "literature_matrix", "document_ids": [doc_a, doc_b], "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is True
@@ -172,7 +188,7 @@ def test_literature_matrix_one_row_per_paper_isolated(two_docs):
 
 def test_literature_matrix_requires_two_documents(two_docs):
     doc_a, _ = two_docs
-    resp = client.post("/analyze", json={"mode": "literature_matrix", "document_ids": [doc_a]})
+    resp = client.post("/analyze", json={"mode": "literature_matrix", "document_ids": [doc_a], "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is False
@@ -181,7 +197,7 @@ def test_literature_matrix_requires_two_documents(two_docs):
 
 def test_knowledge_graph_one_call_nodes_tagged_with_document_id(two_docs):
     doc_a, doc_b = two_docs
-    resp = client.post("/analyze", json={"mode": "knowledge_graph", "document_ids": [doc_a, doc_b]})
+    resp = client.post("/analyze", json={"mode": "knowledge_graph", "document_ids": [doc_a, doc_b], "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is True
@@ -194,7 +210,7 @@ def test_knowledge_graph_one_call_nodes_tagged_with_document_id(two_docs):
 
 def test_knowledge_graph_single_paper(two_docs):
     doc_a, _ = two_docs
-    resp = client.post("/analyze", json={"mode": "knowledge_graph", "document_ids": [doc_a]})
+    resp = client.post("/analyze", json={"mode": "knowledge_graph", "document_ids": [doc_a], "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     data = resp.json()
     assert data["ok"] is True
     assert all(n["document_id"] == doc_a for n in data["nodes"])
@@ -203,7 +219,7 @@ def test_knowledge_graph_single_paper(two_docs):
 
 def test_new_modes_fail_closed_with_no_documents():
     for mode in ("evaluate_paper", "research_gaps", "literature_matrix", "knowledge_graph"):
-        resp = client.post("/analyze", json={"mode": mode, "document_ids": []})
+        resp = client.post("/analyze", json={"mode": mode, "document_ids": [], "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
         assert resp.status_code == 200
         assert resp.json()["ok"] is False
     assert _call_count["n"] == 0
@@ -223,7 +239,7 @@ def _new_session():
 def test_evaluate_paper_persists_evaluation(two_docs):
     doc_a, _ = two_docs
     sid = _new_session()
-    resp = client.post("/analyze", json={"mode": "evaluate_paper", "document_ids": [doc_a], "session_id": sid})
+    resp = client.post("/analyze", json={"mode": "evaluate_paper", "document_ids": [doc_a], "session_id": sid, "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     assert resp.json()["ok"] is True
     msgs = get_session_messages(sid)
     assert len(msgs) == 1 and msgs[0]["role"] == "assistant"
@@ -234,7 +250,7 @@ def test_evaluate_paper_persists_evaluation(two_docs):
 def test_research_gaps_persists_gap_list(two_docs):
     doc_a, doc_b = two_docs
     sid = _new_session()
-    resp = client.post("/analyze", json={"mode": "research_gaps", "document_ids": [doc_a, doc_b], "session_id": sid})
+    resp = client.post("/analyze", json={"mode": "research_gaps", "document_ids": [doc_a, doc_b], "session_id": sid, "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     assert resp.json()["ok"] is True
     msgs = get_session_messages(sid)
     assert len(msgs) == 1
@@ -245,7 +261,7 @@ def test_research_gaps_persists_gap_list(two_docs):
 def test_literature_matrix_persists_rows(two_docs):
     doc_a, doc_b = two_docs
     sid = _new_session()
-    resp = client.post("/analyze", json={"mode": "literature_matrix", "document_ids": [doc_a, doc_b], "session_id": sid})
+    resp = client.post("/analyze", json={"mode": "literature_matrix", "document_ids": [doc_a, doc_b], "session_id": sid, "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     assert resp.json()["ok"] is True
     msgs = get_session_messages(sid)
     assert len(msgs) == 1
@@ -256,7 +272,7 @@ def test_literature_matrix_persists_rows(two_docs):
 def test_knowledge_graph_persists_nodes_and_edges(two_docs):
     doc_a, doc_b = two_docs
     sid = _new_session()
-    resp = client.post("/analyze", json={"mode": "knowledge_graph", "document_ids": [doc_a, doc_b], "session_id": sid})
+    resp = client.post("/analyze", json={"mode": "knowledge_graph", "document_ids": [doc_a, doc_b], "session_id": sid, "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     assert resp.json()["ok"] is True
     msgs = get_session_messages(sid)
     assert len(msgs) == 1
@@ -267,6 +283,6 @@ def test_knowledge_graph_persists_nodes_and_edges(two_docs):
 
 def test_new_modes_persist_nothing_without_session_id(two_docs):
     doc_a, _ = two_docs
-    resp = client.post("/analyze", json={"mode": "evaluate_paper", "document_ids": [doc_a]})
+    resp = client.post("/analyze", json={"mode": "evaluate_paper", "document_ids": [doc_a], "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     assert resp.json()["ok"] is True
     # No session_id sent — nothing to look up; the call above must not raise.

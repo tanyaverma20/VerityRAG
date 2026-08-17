@@ -16,11 +16,58 @@ particular benefits from them under real concurrent load.
 from __future__ import annotations
 
 from sqlalchemy import (
-    Column, String, Integer, Text, ForeignKey, Index,
+    Column, String, Integer, Text, ForeignKey, Index, UniqueConstraint,
 )
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
+
+
+class User(Base):
+    """A real, authenticated principal — added so workspace ownership can be
+    checked against something the CLIENT cannot forge (an authenticated
+    user_id resolved server-side from a session token), instead of trusting
+    a client-supplied workspace_id as the security boundary. See auth.py."""
+    __tablename__ = "users"
+
+    user_id = Column(String, primary_key=True)
+    email = Column(String, nullable=False)
+    # bcrypt hash — never the plaintext password, never reversible.
+    password_hash = Column(String, nullable=False)
+    created_at = Column(String, nullable=False)
+
+    workspaces = relationship("Workspace", back_populates="owner")
+    sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        # Case-insensitive uniqueness would need a functional index; email
+        # is normalized to lowercase before every write/lookup in auth.py
+        # instead, so a plain unique constraint on the stored value is
+        # sufficient and portable across SQLite/PostgreSQL.
+        UniqueConstraint("email", name="uq_users_email"),
+    )
+
+
+class UserSession(Base):
+    """An opaque bearer-token session — real, server-side, revocable (unlike
+    a stateless JWT, DELETE-ing this row is a genuine, immediate logout).
+    Only the SHA-256 hash of the token is stored, so a database read (backup,
+    dump, compromise) never exposes a directly-usable token, mirroring how
+    password_hash never stores a reversible password."""
+    __tablename__ = "user_sessions"
+
+    token_hash = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(String, nullable=False)
+    expires_at = Column(String, nullable=False)
+    last_used_at = Column(String, nullable=True)
+
+    user = relationship("User", back_populates="sessions")
+
+    __table_args__ = (
+        Index("ix_user_sessions_user_id", "user_id"),
+        Index("ix_user_sessions_expires_at", "expires_at"),
+    )
 
 
 class Workspace(Base):
@@ -30,9 +77,22 @@ class Workspace(Base):
     name = Column(String, nullable=False)
     created_at = Column(String, nullable=False)
     updated_at = Column(String, nullable=False)
+    # Nullable for backward compatibility with workspaces that existed
+    # before authentication did (see db/repository.py's
+    # _bootstrap_claim_orphaned_workspaces()) — every NEWLY created
+    # workspace always has a real owner_user_id, enforced in main.py's
+    # /workspaces POST handler, never left null going forward. A workspace
+    # with owner_user_id IS NULL is inaccessible through every authenticated
+    # endpoint (fail-closed), not silently shared across all users.
+    owner_user_id = Column(String, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=True)
 
+    owner = relationship("User", back_populates="workspaces")
     documents = relationship("Document", back_populates="workspace", cascade="all, delete-orphan")
     sessions = relationship("Session", back_populates="workspace", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("ix_workspaces_owner_user_id", "owner_user_id"),
+    )
 
 
 class Document(Base):

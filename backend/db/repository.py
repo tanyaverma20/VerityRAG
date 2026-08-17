@@ -22,7 +22,10 @@ from sqlalchemy import select, func, delete as sa_delete
 from sqlalchemy.exc import SQLAlchemyError
 
 from db.session import session_scope, get_engine, init_schema, is_sqlite
-from db.models import Workspace, Document, Collection, CollectionDocument, Session as SessionModel, Message, Task
+from db.models import (
+    Workspace, Document, Collection, CollectionDocument, Session as SessionModel, Message, Task,
+    User, UserSession,
+)
 
 
 def _now() -> str:
@@ -46,6 +49,17 @@ def _migrate_legacy_columns() -> None:
             "ALTER TABLE sessions ADD COLUMN workspace_id VARCHAR",
             "ALTER TABLE sessions ADD COLUMN title VARCHAR",
             "ALTER TABLE tasks ADD COLUMN workspace_id VARCHAR",
+            # Authentication hardening: a pre-existing `workspaces` table
+            # (real production data, e.g. the "default"/"My Research"
+            # workspace with real uploaded documents) predates the User/
+            # ownership model entirely — Base.metadata.create_all() only
+            # creates tables that don't exist yet, it never ALTERs an
+            # existing one to add a new column, so this explicit ALTER is
+            # required or every existing workspace would be permanently
+            # unreachable through the ownership-checked endpoints. Safe
+            # no-op (caught below) on a fresh database where the column
+            # already exists in the CREATE TABLE this model produced.
+            "ALTER TABLE workspaces ADD COLUMN owner_user_id VARCHAR",
         ):
             try:
                 conn.exec_driver_sql(stmt)
@@ -81,6 +95,31 @@ def _migrate_legacy_columns() -> None:
                 session.flush()
             session.execute(Document.__table__.update().where(Document.workspace_id.is_(None)).values(workspace_id="default"))
             session.execute(SessionModel.__table__.update().where(SessionModel.workspace_id.is_(None)).values(workspace_id="default"))
+
+
+def _bootstrap_claim_orphaned_workspaces(new_user_id: str) -> int:
+    """One-time ownership bootstrap, run at the moment the VERY FIRST user
+    account is ever registered (see main.py's /auth/register): assigns
+    every pre-existing workspace with owner_user_id IS NULL to that new
+    user. This is what preserves access to real production data created
+    before authentication existed (e.g. a workspace with real uploaded
+    documents and real ChromaDB chunks) — the alternative would be
+    permanently locking a genuine operator out of their own existing data
+    the first time they add real auth, which is not an acceptable
+    consequence of a security hardening pass. Only ever touches workspaces
+    that are TRULY unowned (NULL), never reassigns a workspace another user
+    already owns, and only ever runs for the first registration (checked by
+    the caller, not here) so it can't be replayed to hijack workspaces
+    later. Returns the number of workspaces claimed, for an honest log line."""
+    now = _now()
+    with session_scope() as session:
+        orphaned = session.execute(
+            select(Workspace).where(Workspace.owner_user_id.is_(None))
+        ).scalars().all()
+        for ws in orphaned:
+            ws.owner_user_id = new_user_id
+            ws.updated_at = now
+        return len(orphaned)
 
 
 def init_db() -> None:
@@ -139,6 +178,7 @@ def _ws_dict(w: Workspace, session) -> dict:
         "workspace_id": w.workspace_id, "name": w.name,
         "created_at": w.created_at, "updated_at": w.updated_at,
         "paper_count": paper_count, "chat_count": chat_count,
+        "owner_user_id": w.owner_user_id,
     }
 
 
@@ -234,6 +274,26 @@ def list_documents(workspace_id: Optional[str] = None) -> List[dict]:
         return [_doc_dict(d) for d in session.execute(stmt).scalars().all()]
 
 
+def list_documents_for_owner(owner_user_id: str) -> List[dict]:
+    """Real authorization boundary for GET /documents when no workspace_id
+    is given: previously that call listed EVERY document across EVERY
+    workspace with no scoping at all (a real cross-tenant leak once
+    authentication exists) — this instead joins through Workspace.owner_user_id
+    so a caller only ever sees documents inside workspaces they actually own.
+    A LEFT JOIN (not an inner join) so a workspace-less document (legacy,
+    predates workspace support) still appears — same "no workspace_id means
+    no ownership to enforce, stays reachable" policy this API already
+    applies everywhere else (see main.py's _require_resource_owner)."""
+    with session_scope() as session:
+        stmt = (
+            select(Document)
+            .join(Workspace, Workspace.workspace_id == Document.workspace_id, isouter=True)
+            .where((Workspace.owner_user_id == owner_user_id) | (Document.workspace_id.is_(None)))
+            .order_by(Document.created_at.desc())
+        )
+        return [_doc_dict(d) for d in session.execute(stmt).scalars().all()]
+
+
 def documents_in_workspace(document_ids: List[str], workspace_id: str) -> List[str]:
     """Data-layer isolation check: never trusts the caller's document_ids
     list at face value — filters it down to only IDs that actually belong
@@ -255,10 +315,10 @@ def delete_document(document_id: str) -> None:
 # ---------------------------------------------------------------------------
 # Workspace operations
 # ---------------------------------------------------------------------------
-def create_workspace(workspace_id: str, name: str) -> dict:
+def create_workspace(workspace_id: str, name: str, owner_user_id: Optional[str] = None) -> dict:
     now = _now()
     with session_scope() as session:
-        session.add(Workspace(workspace_id=workspace_id, name=name, created_at=now, updated_at=now))
+        session.add(Workspace(workspace_id=workspace_id, name=name, created_at=now, updated_at=now, owner_user_id=owner_user_id))
     return get_workspace(workspace_id)
 
 
@@ -268,9 +328,16 @@ def get_workspace(workspace_id: str) -> Optional[dict]:
         return _ws_dict(ws, session) if ws else None
 
 
-def list_workspaces() -> List[dict]:
+def list_workspaces(owner_user_id: Optional[str] = None) -> List[dict]:
+    """owner_user_id, when given, scopes the result to only that user's own
+    workspaces — the real authorization boundary for GET /workspaces (see
+    main.py's api_list_workspaces). Omitting it keeps the original unscoped
+    listing behavior for internal/legacy call sites."""
     with session_scope() as session:
-        rows = session.execute(select(Workspace).order_by(Workspace.updated_at.desc())).scalars().all()
+        stmt = select(Workspace).order_by(Workspace.updated_at.desc())
+        if owner_user_id:
+            stmt = stmt.where(Workspace.owner_user_id == owner_user_id)
+        rows = session.execute(stmt).scalars().all()
         return [_ws_dict(w, session) for w in rows]
 
 
@@ -355,6 +422,20 @@ def list_sessions(workspace_id: Optional[str] = None) -> List[dict]:
         stmt = select(SessionModel).order_by(SessionModel.updated_at.desc())
         if workspace_id:
             stmt = stmt.where(SessionModel.workspace_id == workspace_id)
+        return [_session_dict(s) for s in session.execute(stmt).scalars().all()]
+
+
+def list_sessions_for_owner(owner_user_id: str) -> List[dict]:
+    """Same authorization boundary as list_documents_for_owner() — LEFT
+    JOIN so a workspace-less session (e.g. a scratch/no-workspace
+    conversation) still appears rather than becoming invisible."""
+    with session_scope() as session:
+        stmt = (
+            select(SessionModel)
+            .join(Workspace, Workspace.workspace_id == SessionModel.workspace_id, isouter=True)
+            .where((Workspace.owner_user_id == owner_user_id) | (SessionModel.workspace_id.is_(None)))
+            .order_by(SessionModel.updated_at.desc())
+        )
         return [_session_dict(s) for s in session.execute(stmt).scalars().all()]
 
 
@@ -459,3 +540,111 @@ def get_task(task_id: str) -> Optional[dict]:
     with session_scope() as session:
         t = session.get(Task, task_id)
         return _task_dict(t) if t else None
+
+
+# ---------------------------------------------------------------------------
+# User / authentication operations (see auth.py for hashing/token logic —
+# this module only ever stores/reads what auth.py already computed; it
+# never hashes a password or generates a token itself, same separation of
+# concerns as every other repository function here being a pure data-layer
+# operation).
+# ---------------------------------------------------------------------------
+def _user_dict(u: User) -> dict:
+    return {"user_id": u.user_id, "email": u.email, "created_at": u.created_at}
+
+
+def create_user(user_id: str, email: str, password_hash: str) -> dict:
+    now = _now()
+    with session_scope() as session:
+        session.add(User(user_id=user_id, email=email, password_hash=password_hash, created_at=now))
+    return get_user_by_id(user_id)
+
+
+def get_user_by_id(user_id: str) -> Optional[dict]:
+    with session_scope() as session:
+        u = session.get(User, user_id)
+        return _user_dict(u) if u else None
+
+
+def get_user_by_email(email: str) -> Optional[dict]:
+    """Returns the full row including password_hash — the ONLY caller that
+    should ever see it is auth.py's login flow, to verify a submitted
+    password against it. Every other user-facing return in this module goes
+    through _user_dict(), which never includes password_hash."""
+    with session_scope() as session:
+        u = session.execute(select(User).where(User.email == email)).scalar_one_or_none()
+        if not u:
+            return None
+        return {"user_id": u.user_id, "email": u.email, "password_hash": u.password_hash, "created_at": u.created_at}
+
+
+def count_users() -> int:
+    """Used once, at registration time, to detect "this is the very first
+    account ever created on this deployment" — the trigger for
+    _bootstrap_claim_orphaned_workspaces(). Never used for anything else."""
+    with session_scope() as session:
+        return session.execute(select(func.count()).select_from(User)).scalar_one()
+
+
+def bootstrap_claim_orphaned_workspaces(new_user_id: str) -> int:
+    return _bootstrap_claim_orphaned_workspaces(new_user_id)
+
+
+def create_user_session(token_hash: str, user_id: str, expires_at: str) -> None:
+    now = _now()
+    with session_scope() as session:
+        session.add(UserSession(token_hash=token_hash, user_id=user_id, created_at=now, expires_at=expires_at))
+
+
+def get_user_by_token_hash(token_hash: str) -> Optional[dict]:
+    """The real authentication check every protected request goes through
+    (see auth.py:get_current_user): looks up the session by the HASH of the
+    bearer token (never the raw token — nothing queryable in the DB is ever
+    the usable secret itself), and returns None (never raises, never
+    silently trusts an expired row) if the session doesn't exist or has
+    expired. A found-but-expired session is NOT deleted here — that's
+    delete_expired_sessions()'s job, kept separate so a read-path function
+    never has a surprising write side effect."""
+    with session_scope() as session:
+        row = session.execute(
+            select(UserSession, User)
+            .join(User, UserSession.user_id == User.user_id)
+            .where(UserSession.token_hash == token_hash)
+        ).first()
+        if not row:
+            return None
+        user_session, user = row
+        if user_session.expires_at < _now():
+            return None
+        user_session.last_used_at = _now()
+        return _user_dict(user)
+
+
+def delete_user_session(token_hash: str) -> None:
+    """Real, immediate, server-side logout — deletes the session row, so
+    the token this call was authenticated with (and only that one; other
+    devices/sessions for the same user are untouched) stops working on the
+    very next request, unlike a stateless JWT which stays valid until it
+    naturally expires."""
+    with session_scope() as session:
+        session.execute(sa_delete(UserSession).where(UserSession.token_hash == token_hash))
+
+
+def delete_expired_user_sessions() -> int:
+    """Best-effort cleanup, called opportunistically (see auth.py) — not a
+    correctness requirement (get_user_by_token_hash() already refuses an
+    expired session), just table hygiene so this table doesn't grow
+    unbounded with dead rows."""
+    now = _now()
+    with session_scope() as session:
+        result = session.execute(sa_delete(UserSession).where(UserSession.expires_at < now))
+        return result.rowcount or 0
+
+
+def workspace_owner_id(workspace_id: str) -> Optional[str]:
+    """Cheap, read-only helper for authorization checks that only need to
+    know WHO owns a workspace, not the full workspace payload (avoids the
+    paper_count/chat_count aggregate queries _ws_dict() does on every call)."""
+    with session_scope() as session:
+        ws = session.get(Workspace, workspace_id)
+        return ws.owner_user_id if ws else None

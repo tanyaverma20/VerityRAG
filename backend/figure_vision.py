@@ -80,7 +80,7 @@ def get_uploaded_pdf_path(document_id: str) -> Path | None:
     return p if p.exists() else None
 
 
-def render_page_as_image_base64(document_id: str, page_number: int, zoom: float = 2.0) -> str | None:
+def render_page_as_image_base64(document_id: str, page_number: int, zoom: float = 1.0) -> str | None:
     """
     Renders ONE page of THIS document's originally-uploaded PDF as a PNG,
     base64-encoded (data-URL-ready). Returns None — never raises — when:
@@ -90,6 +90,25 @@ def render_page_as_image_base64(document_id: str, page_number: int, zoom: float 
       - any rendering error occurs.
     A None return means the caller must fall back to the text-based
     explanation honestly, not silently retry or guess.
+
+    Default zoom lowered from 2.0 to 1.0 (real, reproduced live-browser
+    finding this session): a zoom=2.0 render of a typical academic PDF page
+    pushed the vision request to ~9242 tokens, over this account's real
+    Groq TPM cap for the configured vision model (8000 tokens/minute,
+    on_demand tier — confirmed via the API's own 413 rate_limit_exceeded
+    response), causing every live vision call to be rejected before the
+    model ever saw the image and silently degrade to the honest text
+    fallback. Direct measurement (this session) showed the model's image
+    tokenizer does NOT cost scale smoothly with pixel count — 1.5x zoom
+    still hit the identical 9242-token rejection as 2.0x, but 1.0x (and a
+    tested 0.8x) both dropped below the cap and produced a REAL successful
+    vision read of the page (confirmed: the model correctly named and
+    described the page's actual diagram content, not a generic guess).
+    1.0x was chosen over 0.8x as the new default for the extra legibility
+    margin on dense academic figures/tables. This does not touch the
+    honest-fallback path itself, which still fires correctly on any
+    genuine failure (no PDF persisted, model still unavailable, or the
+    account is rate-limited for an unrelated reason).
     """
     pdf_path = get_uploaded_pdf_path(document_id)
     if not pdf_path:

@@ -17,21 +17,38 @@ from fastapi.testclient import TestClient
 import config
 from ingest import get_collection
 from retrieval import build_bm25_index
+from database import add_document
 from main import app
+from test_auth_helpers import registered_user_with_workspace
 
 client = TestClient(app)
 
 _call_count = {"n": 0}
 
+# /analyze and /report now require a real authenticated, workspace-owning
+# caller — see test_workspace_isolation.py for why this is a
+# module-scoped fixture rather than bare module-level code.
+HEADERS: dict = {}
+WORKSPACE_ID: str = ""
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _module_auth():
+    global HEADERS, WORKSPACE_ID
+    HEADERS, WORKSPACE_ID = registered_user_with_workspace(client, "titles")
+    yield
+
 
 def _push_chunk(document_id: str, suffix: str, text: str, filename: str) -> None:
+    add_document(document_id, filename, status="INDEXED", workspace_id=WORKSPACE_ID)
     col = get_collection()
     chunk_id = f"doc_{document_id}_{suffix}"
     col.add(
         documents=[text],
         ids=[chunk_id],
         metadatas=[{
-            "document_id": document_id, "filename": filename, "source": filename,
+            "document_id": document_id, "workspace_id": WORKSPACE_ID,
+            "filename": filename, "source": filename,
             "page_number": 1, "section": "Body", "chunk_id": chunk_id,
             "parent_id": f"{document_id}_{suffix}_parent", "chunk_type": "child",
         }],
@@ -138,13 +155,13 @@ def real_and_hash_named_docs():
 # ---------------------------------------------------------------------------
 def test_evaluate_paper_title_never_leaks_document_id(real_and_hash_named_docs):
     doc_a, doc_b = real_and_hash_named_docs
-    resp = client.post("/analyze", json={"mode": "evaluate_paper", "document_ids": [doc_a]})
+    resp = client.post("/analyze", json={"mode": "evaluate_paper", "document_ids": [doc_a], "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     data = resp.json()
     assert data["ok"] is True
     assert data["evaluation"]["title"] == "OS Full Notes"
     assert data["evaluation"]["document_id"] == doc_a, "document_id itself must stay exactly as-is"
 
-    resp2 = client.post("/analyze", json={"mode": "evaluate_paper", "document_ids": [doc_b]})
+    resp2 = client.post("/analyze", json={"mode": "evaluate_paper", "document_ids": [doc_b], "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     data2 = resp2.json()
     assert data2["ok"] is True
     assert not _looks_like_leaked_id(data2["evaluation"]["title"], doc_b), f"Title must never contain the raw document_id, got {data2['evaluation']['title']!r}"
@@ -153,7 +170,7 @@ def test_evaluate_paper_title_never_leaks_document_id(real_and_hash_named_docs):
 
 def test_research_gaps_document_titles_map_never_leaks_id(real_and_hash_named_docs):
     doc_a, doc_b = real_and_hash_named_docs
-    resp = client.post("/analyze", json={"mode": "research_gaps", "document_ids": [doc_a, doc_b]})
+    resp = client.post("/analyze", json={"mode": "research_gaps", "document_ids": [doc_a, doc_b], "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     data = resp.json()
     assert data["ok"] is True
     titles = data["document_titles"]
@@ -166,7 +183,7 @@ def test_research_gaps_document_titles_map_never_leaks_id(real_and_hash_named_do
 
 def test_literature_matrix_rejects_model_echoing_id_as_title(real_and_hash_named_docs):
     doc_a, doc_b = real_and_hash_named_docs
-    resp = client.post("/analyze", json={"mode": "literature_matrix", "document_ids": [doc_a, doc_b]})
+    resp = client.post("/analyze", json={"mode": "literature_matrix", "document_ids": [doc_a, doc_b], "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     data = resp.json()
     assert data["ok"] is True
     row_a = next(r for r in data["rows"] if r["document_id"] == doc_a)
@@ -181,7 +198,7 @@ def test_literature_matrix_rejects_model_echoing_id_as_title(real_and_hash_named
 
 def test_knowledge_graph_document_titles_map_never_leaks_id(real_and_hash_named_docs):
     doc_a, doc_b = real_and_hash_named_docs
-    resp = client.post("/analyze", json={"mode": "knowledge_graph", "document_ids": [doc_a, doc_b]})
+    resp = client.post("/analyze", json={"mode": "knowledge_graph", "document_ids": [doc_a, doc_b], "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     data = resp.json()
     assert data["ok"] is True
     titles = data["document_titles"]
@@ -192,7 +209,7 @@ def test_knowledge_graph_document_titles_map_never_leaks_id(real_and_hash_named_
 
 def test_comparative_report_title_never_leaks_document_id(real_and_hash_named_docs):
     doc_a, doc_b = real_and_hash_named_docs
-    resp = client.post("/report", json={"document_ids": [doc_a, doc_b]})
+    resp = client.post("/report", json={"document_ids": [doc_a, doc_b], "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     data = resp.json()
     assert data["ok"] is True
     paper_a = next(p for p in data["papers"] if p["document_id"] == doc_a)
@@ -206,9 +223,9 @@ def test_comparative_report_title_never_leaks_document_id(real_and_hash_named_do
 
 def test_comparative_report_markdown_export_never_leaks_document_id(real_and_hash_named_docs):
     doc_a, doc_b = real_and_hash_named_docs
-    resp = client.post("/report", json={"document_ids": [doc_a, doc_b]})
+    resp = client.post("/report", json={"document_ids": [doc_a, doc_b], "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     data = resp.json()
-    md_resp = client.get(f"/report/{data['report_id']}/markdown")
+    md_resp = client.get(f"/report/{data['report_id']}/markdown", headers=HEADERS)
     assert md_resp.status_code == 200
     md_text = md_resp.text
     assert doc_b not in md_text, "Exported Markdown must never contain the raw document_id"

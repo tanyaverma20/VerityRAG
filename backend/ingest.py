@@ -50,6 +50,53 @@ def get_collection():
         )
     return _collection
 
+def backfill_orphaned_chunk_workspace_ids() -> int:
+    """Safety-net migration, mirrors db.repository._migrate_legacy_columns()
+    on the Chroma side of the same problem.
+
+    A document's Postgres row can already carry a real workspace_id (e.g.
+    backfilled into the auto-created 'default' workspace by
+    _migrate_legacy_columns()) while its Chroma chunks still carry
+    workspace_id="" — true for any document ingested before workspace
+    scoping existed. retrieval._scope_where_clause() deliberately treats an
+    empty/missing chunk workspace_id as never matching a real workspace_id
+    filter (fail-closed, so legacy chunks can never leak cross-workspace) —
+    which also means such a document becomes permanently unretrievable
+    the moment its Postgres row is backfilled, unless its chunk metadata is
+    backfilled to match. Confirmed as a real, reproducible bug this session:
+    a genuine pre-existing document (bdfaa68d8984f0dc) backfilled into the
+    'default' workspace in Postgres returned documents_found=0 on every
+    query because its 49 Chroma chunks still read workspace_id="".
+
+    Idempotent and metadata-only — uses Chroma's update() (not
+    add()/upsert() with new embeddings, not delete+re-add), so it never
+    re-embeds, re-chunks, or changes chunk content/ordering/count. A
+    document whose chunks already carry the correct workspace_id is a
+    guaranteed no-op. Best-effort: any failure is caught by the caller so
+    it can never block app startup."""
+    from database import list_documents
+
+    collection = get_collection()
+    updated = 0
+    for doc in list_documents():
+        ws_id = doc.get("workspace_id")
+        doc_id = doc.get("document_id")
+        if not ws_id or not doc_id:
+            continue
+        existing = collection.get(where={"document_id": doc_id}, include=["metadatas"])
+        stale_ids, stale_metadatas = [], []
+        for chunk_id, metadata in zip(existing["ids"], existing["metadatas"]):
+            if metadata.get("workspace_id") != ws_id:
+                new_metadata = dict(metadata)
+                new_metadata["workspace_id"] = ws_id
+                stale_ids.append(chunk_id)
+                stale_metadatas.append(new_metadata)
+        if stale_ids:
+            collection.update(ids=stale_ids, metadatas=stale_metadatas)
+            updated += len(stale_ids)
+    return updated
+
+
 def get_document_id(file_path: str) -> str:
     """Generate a deterministic document ID based on file contents."""
     with open(file_path, "rb") as f:

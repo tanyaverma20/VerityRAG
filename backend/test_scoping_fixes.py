@@ -31,19 +31,36 @@ import config
 from ingest import get_collection
 from retrieval import build_bm25_index, select_within_token_budget
 from report_generator import _gather_report_evidence
+from database import add_document
 from main import app
+from test_auth_helpers import registered_user_with_workspace
 
 client = TestClient(app)
 
+# /analyze and /report now require a real authenticated, workspace-owning
+# caller — see test_workspace_isolation.py for why this is a
+# module-scoped fixture rather than bare module-level code.
+HEADERS: dict = {}
+WORKSPACE_ID: str = ""
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _module_auth():
+    global HEADERS, WORKSPACE_ID
+    HEADERS, WORKSPACE_ID = registered_user_with_workspace(client, "scoping")
+    yield
+
 
 def _push_chunk(document_id: str, suffix: str, text: str, filename: str) -> None:
+    add_document(document_id, filename, status="INDEXED", workspace_id=WORKSPACE_ID)
     col = get_collection()
     chunk_id = f"doc_{document_id}_{suffix}"
     col.add(
         documents=[text],
         ids=[chunk_id],
         metadatas=[{
-            "document_id": document_id, "filename": filename, "source": filename,
+            "document_id": document_id, "workspace_id": WORKSPACE_ID,
+            "filename": filename, "source": filename,
             "page_number": 1, "section": "Body", "chunk_id": chunk_id,
             "parent_id": f"{document_id}_{suffix}_parent", "chunk_type": "child",
         }],
@@ -164,7 +181,7 @@ def two_docs():
 # ---------------------------------------------------------------------------
 def test_viva_pdf_a_only_scoped_to_a(two_docs):
     doc_a, doc_b = two_docs
-    resp = client.post("/analyze", json={"mode": "viva", "document_ids": [doc_a], "difficulty": "advanced", "num_questions": 3})
+    resp = client.post("/analyze", json={"mode": "viva", "document_ids": [doc_a], "difficulty": "advanced", "num_questions": 3, "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     data = resp.json()
     assert data["ok"] is True
     assert data["documents_used"] == [doc_a]
@@ -174,7 +191,7 @@ def test_viva_pdf_a_only_scoped_to_a(two_docs):
 
 def test_viva_pdf_b_only_scoped_to_b(two_docs):
     doc_a, doc_b = two_docs
-    resp = client.post("/analyze", json={"mode": "viva", "document_ids": [doc_b], "difficulty": "basic", "num_questions": 5})
+    resp = client.post("/analyze", json={"mode": "viva", "document_ids": [doc_b], "difficulty": "basic", "num_questions": 5, "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     data = resp.json()
     assert data["ok"] is True
     assert data["documents_used"] == [doc_b]
@@ -183,7 +200,7 @@ def test_viva_pdf_b_only_scoped_to_b(two_docs):
 
 def test_viva_both_selected_can_use_both(two_docs):
     doc_a, doc_b = two_docs
-    resp = client.post("/analyze", json={"mode": "viva", "document_ids": [doc_a, doc_b], "num_questions": 8})
+    resp = client.post("/analyze", json={"mode": "viva", "document_ids": [doc_a, doc_b], "num_questions": 8, "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     data = resp.json()
     assert data["ok"] is True
     assert set(data["documents_used"]) == {doc_a, doc_b}
@@ -195,7 +212,7 @@ def test_viva_both_selected_can_use_both(two_docs):
 # ---------------------------------------------------------------------------
 def test_mock_test_scoped_to_selected_pdf(two_docs):
     doc_a, doc_b = two_docs
-    resp = client.post("/analyze", json={"mode": "mock_test", "document_ids": [doc_a], "difficulty": "intermediate", "num_questions": 3})
+    resp = client.post("/analyze", json={"mode": "mock_test", "document_ids": [doc_a], "difficulty": "intermediate", "num_questions": 3, "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     data = resp.json()
     assert data["ok"] is True
     assert data["documents_used"] == [doc_a]
@@ -209,9 +226,9 @@ def test_mock_test_scoped_to_selected_pdf(two_docs):
 def test_project_interview_start_grounded_in_uploaded_pdf_not_verityrag(two_docs):
     doc_a, doc_b = two_docs
     resp = client.post("/analyze", json={
-        "mode": "project_interview_start", "document_ids": [doc_a], "workspace_id": None,
+        "mode": "project_interview_start", "document_ids": [doc_a], "workspace_id": WORKSPACE_ID,
         "difficulty": "intermediate", "topics": [],
-    })
+    }, headers=HEADERS)
     data = resp.json()
     assert data["ok"] is True
     assert data["question"]
@@ -227,7 +244,7 @@ def test_project_interview_start_grounded_in_uploaded_pdf_not_verityrag(two_docs
 def test_project_interview_requires_documents_no_default_to_verityrag():
     """With zero documents scoped, interview must fail closed (insufficient
     documents), never silently fall back to interviewing about VerityRAG."""
-    resp = client.post("/analyze", json={"mode": "project_interview_start", "document_ids": [], "difficulty": "basic"})
+    resp = client.post("/analyze", json={"mode": "project_interview_start", "document_ids": [], "difficulty": "basic", "workspace_id": WORKSPACE_ID}, headers=HEADERS)
     data = resp.json()
     assert data["ok"] is False
     assert "ACTUAL SYSTEM ARCHITECTURE" not in _last_prompt["text"]
@@ -236,10 +253,10 @@ def test_project_interview_requires_documents_no_default_to_verityrag():
 
 def test_project_interview_switches_to_whichever_pdf_is_scoped(two_docs):
     doc_a, doc_b = two_docs
-    resp_a = client.post("/analyze", json={"mode": "project_interview_start", "document_ids": [doc_a], "difficulty": "basic"})
+    resp_a = client.post("/analyze", json={"mode": "project_interview_start", "document_ids": [doc_a], "difficulty": "basic", "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     assert "RetentionAI" in _last_prompt["text"]
 
-    resp_b = client.post("/analyze", json={"mode": "project_interview_start", "document_ids": [doc_b], "difficulty": "basic"})
+    resp_b = client.post("/analyze", json={"mode": "project_interview_start", "document_ids": [doc_b], "difficulty": "basic", "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     assert "SmartSwipe" in _last_prompt["text"]
     assert "RetentionAI" not in _last_prompt["text"]
 
@@ -249,8 +266,7 @@ def test_project_interview_evaluate_grounded_in_same_pdf_evidence(two_docs):
     resp = client.post("/analyze", json={
         "mode": "project_interview_evaluate", "document_ids": [doc_a],
         "question": "What is RetentionAI's architecture?", "user_answer": "It uses a five-stage pipeline.",
-        "difficulty": "intermediate", "topics": [],
-    })
+        "difficulty": "intermediate", "topics": [], "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     data = resp.json()
     assert data["ok"] is True
     assert data["correctness"] in ("correct", "partially_correct", "incorrect", "unclear")
@@ -262,7 +278,7 @@ def test_project_interview_evaluate_grounded_in_same_pdf_evidence(two_docs):
 def test_why_design_and_system_design_still_use_verityrag_context():
     """Explicitly unaffected — these two modes stay grounded in VerityRAG's
     own architecture, per the requirement to keep them as-is."""
-    resp = client.post("/analyze", json={"mode": "why_design", "question": "Why RRF?"})
+    resp = client.post("/analyze", json={"mode": "why_design", "question": "Why RRF?", "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     assert resp.json()["ok"] is True
     assert "ACTUAL SYSTEM ARCHITECTURE" in _last_prompt["text"]
 
@@ -295,7 +311,7 @@ def test_report_evidence_gathering_represents_both_documents_within_budget(two_d
 # ---------------------------------------------------------------------------
 def test_compare_report_includes_both_papers(two_docs):
     doc_a, doc_b = two_docs
-    resp = client.post("/report", json={"document_ids": [doc_a, doc_b]})
+    resp = client.post("/report", json={"document_ids": [doc_a, doc_b], "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     data = resp.json()
     assert data["ok"] is True
     returned_ids = {p["document_id"] for p in data["papers"]}
@@ -309,7 +325,7 @@ def test_compare_a_and_c_excludes_unrelated_b(two_docs):
     _push_chunk(doc_c, "c2", "GreenGrid's architecture ingests IoT sensor streams and forecasts load with an LSTM model.", "GreenGrid.pdf")
     build_bm25_index()
 
-    resp = client.post("/report", json={"document_ids": [doc_a, doc_c]})
+    resp = client.post("/report", json={"document_ids": [doc_a, doc_c], "workspace_id": WORKSPACE_ID,}, headers=HEADERS)
     data = resp.json()
     assert data["ok"] is True
     returned_ids = {p["document_id"] for p in data["papers"]}

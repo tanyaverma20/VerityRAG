@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import * as api from "../api/client";
-import type { DocumentRecord, SessionRecord, Workspace } from "../api/types";
 
 const LAST_WORKSPACE_KEY = "verityrag_last_workspace_id";
 
@@ -11,18 +10,18 @@ const LAST_WORKSPACE_KEY = "verityrag_last_workspace_id";
  * single typed hook instead of globals.
  */
 export function useWorkspace() {
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [documents, setDocuments] = useState<DocumentRecord[]>([]);
-  const [sessions, setSessions] = useState<SessionRecord[]>([]);
+  const [workspaces, setWorkspaces] = useState([]);
+  const [activeId, setActiveId] = useState(null);
+  const [documents, setDocuments] = useState([]);
+  const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(null);
 
-  const loadWorkspaceData = useCallback(async (workspaceId: string) => {
+  const loadWorkspaceData = useCallback(async (workspaceId) => {
     const [docs, sess] = await Promise.all([
-      api.listDocuments(workspaceId),
-      api.listSessions(workspaceId),
-    ]);
+    api.listDocuments(workspaceId),
+    api.listSessions(workspaceId)]
+    );
     setDocuments(docs);
     setSessions(sess);
   }, []);
@@ -45,7 +44,7 @@ export function useWorkspace() {
   }, [loadWorkspaceData]);
 
   const switchWorkspace = useCallback(
-    async (id: string) => {
+    async (id) => {
       setActiveId(id);
       localStorage.setItem(LAST_WORKSPACE_KEY, id);
       await loadWorkspaceData(id);
@@ -54,7 +53,7 @@ export function useWorkspace() {
   );
 
   const createWorkspace = useCallback(
-    async (name: string) => {
+    async (name) => {
       const ws = await api.createWorkspace(name);
       setWorkspaces((prev) => [ws, ...prev]);
       await switchWorkspace(ws.workspace_id);
@@ -92,6 +91,6 @@ export function useWorkspace() {
     createWorkspace,
     refreshDocuments,
     refreshSessions,
-    refreshWorkspaces,
+    refreshWorkspaces
   };
 }

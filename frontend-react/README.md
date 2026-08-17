@@ -1,91 +1,99 @@
-# VerityRAG — React Frontend (in progress)
+# VerityRAG — React Frontend
 
-A real, incrementally-built React + TypeScript + Vite replacement for
-`frontend/index.html` (the original ~3,100-line single-file vanilla-JS
-app). This is **not yet feature-complete** — see "What's covered" below —
-and the original frontend remains the one actually served/relied on until
-parity is demonstrated and this directory is explicitly promoted.
+The canonical, production-ready frontend for the VerityRAG research platform, built with **React 19**, **Vanilla JavaScript** (`.jsx`/`.js`, no TypeScript), and **Vite**.
 
-## What's real and working here
+It replaces the legacy single-file static interface with a modular component architecture, full authentication flow, workspace management, document scoping, and comprehensive research analysis interfaces.
 
-Everything below has been built against the actual FastAPI backend (not
-mocked) and manually verified end-to-end in a live browser session against
-a real Postgres-backed, Redis-cached backend instance:
+---
 
-- **Typed API client** (`src/api/client.ts`, `src/api/types.ts`) covering
-  every real endpoint the old frontend calls: workspaces, documents
-  (list/get/delete/upload), sessions (list/create/rename/delete/messages),
-  `/query`, `/analyze`, `/report` (+ download URLs), `/eval/dashboard`.
-- **Workspace management** — list, switch (persisted via `localStorage`,
-  same pattern as the old frontend), create.
-- **Document upload/list/delete**, scoped per workspace exactly like the
-  original (`workspace_id` threaded through every call).
-- **Conversation list** per workspace, new/select/delete, with real
-  message-history restore from `GET /sessions/{id}/messages`.
-- **Normal Q&A chat** (`/query`) — the core product loop: ask a question
-  scoped to the workspace's INDEXED documents, render the grounded answer,
-  confidence pill, and de-duplicated citation pills; correctly renders a
-  real backend error state (e.g. rate-limiting) without crashing.
-- **23 passing unit/component tests** (Vitest + React Testing Library):
-  every API client function, empty-state logic, document-readiness
-  filtering, submit/disable behavior, citation dedup — see `npm test`.
-- **Clean production build** (`npm run build` → `tsc -b && vite build`,
-  zero errors) and a working dev server (`npm run dev`).
+## Features
 
-## What is NOT yet migrated (honest gap list)
+- **Authentication & Security**: Complete user registration, login, token management (`Bearer` authentication header), and server-side session lifecycle integration (`src/hooks/useAuth.js`).
+- **Workspace & Document Management**: Workspace switching, creation, and document upload/deletion scoped strictly to the authenticated owner (`src/hooks/useWorkspace.js`).
+- **Document-Scoped Retrieval**: Automatic, explicit, and click-to-select document scoping (`src/utils/scope.js`) for targeted paper analysis.
+- **Normal Q&A Chat & Deep Research**: Grounded Q&A with citation metadata, confidence badges, and synchronous Deep Research mode toggle.
+- **Structured Research Analysis**:
+  - **Research Gaps**: Inferred vs. author-stated research gap extraction.
+  - **Literature Matrix**: Side-by-side comparative HTML table for multi-document review.
+  - **Knowledge Graph**: Entity/concept relationship mapping.
+  - **Evaluate Paper**: 7-dimension paper critique with support evidence badges.
+  - **Explain Figure**: Multimodal figure/table vision analysis with graceful text fallback.
+  - **Comparative Reports**: Unified multi-paper comparative synthesis (`/report`).
+- **Learning & Interview Suite**:
+  - **Viva & Mock Test**: Quiz question generation with custom difficulty and question counts.
+  - **Project Interview**: Interactive multi-turn interview loop with 11-topic setup steering.
+  - **Why This Design? & System Design**: Architecture question lists grounded in platform design decisions.
+- **Eval Dashboard**: Live telemetry metrics (LLM latency, cache hit rate, token counts) and offline benchmark scores.
 
-The original frontend has ~90 functions covering a much larger surface.
-These remain **only in `frontend/index.html`** for now:
-
-- Deep Research mode (async `/research` + task polling)
-- Viva / Mock Test question generation
-- Project Interview (start/evaluate loop)
-- Why This Design? / System Design (non-PDF-grounded modes)
-- Explain Figure (incl. the vision-model image-rendering path)
-- Evaluate Paper, Research Gaps, Literature Matrix, Knowledge Graph cards
-- Comparative Report generation + rendering + PDF/DOCX/Markdown download
-- Compare / Recommend views
-- Eval Dashboard UI (the backend endpoint is in the typed client already;
-  no screen renders it yet)
-- The "+" composer menu that groups all of the above
-- Drag-and-drop upload (click-to-upload works; drag zone does not yet)
-- Document-scope pill picker for a specific question (chat currently
-  always scopes to all INDEXED documents in the active workspace)
+---
 
 ## Architecture
 
 ```
-src/
-  api/         typed fetch client + response/request interfaces
-  hooks/       useWorkspace (workspace+documents+sessions), useChat (messages+send)
-  components/  Sidebar, ChatWindow, MessageBubble
-  App.tsx      wires hooks + components into the app shell
+frontend-react/src/
+├── api/
+│   └── client.js              Fetch API client for FastAPI backend endpoints
+├── components/
+│   ├── AnalysisResultCard.jsx Card dispatcher for structured analysis modes
+│   ├── AuthScreen.jsx         User login and registration interface
+│   ├── ChatWindow.jsx         Main chat stream, composer, and Deep Research banner
+│   ├── ComposerMenu.jsx       Actions menu (+) grouping analysis tools
+│   ├── EvalDashboard.jsx      Live telemetry and evaluation metric dashboard modal
+│   ├── MessageBubble.jsx      Chat message bubble (Q&A, citations, status)
+│   ├── SetupModal.jsx         Configuration modal for interview/quiz/figure/design modes
+│   └── Sidebar.jsx            Workspace switcher, document list, and chat history
+├── hooks/
+│   ├── useAuth.js             Authentication & token state management
+│   ├── useChat.js             Chat session, query execution, and analysis state
+│   └── useWorkspace.js        Workspaces, document uploads, and session persistence
+├── utils/
+│   ├── interviewConstants.js Fixed topic and design question constants
+│   └── scope.js               Document scope resolution logic
+└── test/
+    └── setup.js               Vitest & Testing Library environment setup
 ```
 
-State management is plain React hooks (`useState`/`useCallback`) — no
-external state library. This was a deliberate choice for the current
-scope; if/when the remaining analysis-mode UIs are added, revisit whether
-a shared context or a library like Zustand pulls its weight.
+---
 
-## Running it
+## API Integration
 
+The frontend connects to the FastAPI backend via `src/api/client.js`. All authenticated requests automatically include the user's opaque session token in the `Authorization: Bearer <token>` header.
+
+Key endpoint mappings:
+- **Auth**: `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`
+- **Workspaces**: `GET /workspaces`, `POST /workspaces`, `GET /workspaces/{id}`
+- **Documents**: `GET /documents`, `POST /upload`, `DELETE /documents/{id}`
+- **Q&A & Research**: `POST /query`, `POST /analyze`, `POST /report`
+- **Sessions**: `GET /sessions`, `POST /sessions`, `GET /sessions/{id}/messages`
+- **Dashboard**: `GET /eval/dashboard`
+
+---
+
+## Development & Testing
+
+### Running Locally
 ```bash
-cd frontend-react
+# Install dependencies
 npm install
-npm run dev      # http://localhost:5173, expects the backend on :8001
-npm run build    # production build → dist/
-npm test         # Vitest, 23 tests
+
+# Start Vite development server (http://localhost:5173)
+npm run dev
 ```
 
-Set `VITE_API_BASE` in `.env` (defaults to `http://127.0.0.1:8001`) if the
-backend runs elsewhere.
+### Running Test Suite
+```bash
+# Execute Vitest test suite (113 passing tests)
+npm test
+```
 
-## Migration plan
+### Production Build
+```bash
+# Compile client bundle for production (output to dist/)
+npm run build
+```
 
-Per the project's explicit migration policy: **the old `frontend/`
-remains the served, relied-upon frontend until this one reaches real
-feature parity and is explicitly verified against the real backend for
-every major flow** — not deleted or defaulted-to preemptively. Each
-remaining item above is a self-contained, addable slice (its own
-component + hook + tests) rather than a rewrite of what already exists
-here.
+---
+
+## Canonical Status
+
+`frontend-react` is configured as the default served frontend application across dev and production environments. Legacy static files (`frontend/index.html`) remain solely as historical reference artifacts.

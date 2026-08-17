@@ -73,6 +73,21 @@ def real_pg_engine():
     resolved = db_session.resolve_database_url()
     assert resolved.startswith("postgresql"), f"Expected the real Postgres URL, got {resolved!r}"
 
+    # database.py's module-level init_db() (schema create + the additive
+    # ALTER-column safety net in db.repository._migrate_legacy_columns())
+    # only ever runs ONCE, at that module's first import in this process —
+    # which happened before this fixture swapped the engine to point at
+    # the real database, so it ran against the SQLite-isolated engine
+    # active at that time, never against this real Postgres connection.
+    # Re-running it here (additive-only, a safe no-op on a database that's
+    # already current) is what keeps a real, pre-existing Postgres database
+    # schema-current for new columns added after it was first created —
+    # confirmed as a real, reproducible gap: a fresh `owner_user_id` column
+    # added to the Workspace model was missing from real Postgres until
+    # this call was added.
+    import database as _database_module
+    _database_module.init_db()
+
     yield db_session.get_engine()
 
     if db_session._engine is not None:
