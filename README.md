@@ -28,6 +28,16 @@ VerityRAG addresses these challenges by combining a hybrid multi-stage retrieval
 
 ---
 
+## Product Preview
+
+<p align="center">
+  <img src="docs/images/verity-ui.png" alt="VerityRAG application interface" width="100%">
+</p>
+
+*VerityRAG research intelligence workspace for document-grounded analysis and retrieval.*
+
+---
+
 ## Key Features
 
 ### Research & RAG
