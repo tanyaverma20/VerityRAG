@@ -252,9 +252,11 @@ app = FastAPI(title="VerityRAG API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ALLOWED_ORIGINS,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    allow_credentials=True,   # Required: the Authorization: Bearer header is a
+    allow_methods=["*"],      # non-simple header that triggers a CORS preflight;
+    allow_headers=["*"],      # without allow_credentials=True browsers reject the
+)                             # preflight and every authenticated request fails with
+                              # "Failed to fetch" even though the origin IS allowed.
 
 ANSWER_PROMPT = """Answer the question using ONLY the source passages below.
 If the passages don't contain enough information, say so explicitly.
